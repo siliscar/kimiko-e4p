@@ -39,13 +39,17 @@ static ui_quick_control_t s_fl_pending_control;
 // 屏幕上第四枚圆钮当前画出的开灯状态；点按翻转后据此决定是否重画。
 // The frontlight state currently painted on the fourth circle; a tap uses it to decide the repaint.
 static bool s_fl_shown_on;
-// 快捷层只持有预览值；落盘只发生在松手、点选或关闭/读错时，一次拖动只写一遍 NVS。
-// The layer holds preview values; NVS writes happen on release, tap, close or a read error, once per drag.
+// 只提交本层尚未保存的调节；关闭后的旧预览不能覆盖实体键已保存的新状态。
+// Commit only unsaved changes made here; a closed layer's stale preview must not overwrite a saved key change.
+static bool s_fl_dirty;
+// 落盘只发生在松手、点选或关闭/读错时，一次拖动只写一遍 NVS。
+// NVS writes happen on release, tap, close or a read error, once per drag.
 static void quick_frontlight_persist(void) {
-    if (!s_quick.frontlight) return;
+    if (!s_quick.frontlight || !s_fl_dirty) return;
     app_settings_set_frontlight_on(s_quick.fl_on);
     app_settings_set_frontlight_brightness(s_quick.fl_bri);
     app_settings_set_frontlight_cct(s_quick.fl_cct);
+    s_fl_dirty = false;
 }
 void app_quick_layer_reset(void) {
     quick_frontlight_persist();
@@ -215,6 +219,7 @@ static void quick_frontlight_present(app_ctx_t *ctx, const app_desc_t *current,
 static void quick_frontlight_event(app_ctx_t *ctx, const app_desc_t *current,
                                    const ui_quick_event_t *event, bool coalesce) {
     if (!s_quick.frontlight) return;
+    s_fl_dirty = true;
     (void)frontlight_apply(s_quick.fl_on, s_quick.fl_bri, s_quick.fl_cct);
     if (event->commit) quick_frontlight_persist();
     if (!coalesce) {

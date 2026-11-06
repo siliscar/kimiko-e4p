@@ -179,6 +179,7 @@ static bool media_test, sd_font, saved_sd_font;
 static bool mounted_steps[32], present_steps[32];
 static int media_lost, media_ready, builtin_opens, font_opens, probes, remounts, loss_step;
 static bool fl_ready, fl_on;
+static bool up_key_bound, up_key_steps[32];
 static uint8_t fl_bri=40, fl_cct=50;
 static int fl_applies, fl_control_draws, fl_sweep_draws, fl_drag_pushes, fl_white_pushes, fl_gray_pushes, fl_key_gl, quick_gl_height;
 int E0470_WAVEFORM;
@@ -345,11 +346,10 @@ void app_restart_host(void) {++restarts;longjmp(done,1);}
 void epd_poweroff(void) {}
 const char* app_settings_font_path(void) {return "builtin";}
 bool app_settings_reader_power_turn(void) {return false;}
-// 上键全局兜底在宿主测试里保持不绑定：GPIO 不被轮询，既有场景行为零变化。
-// / The global up-key fallback stays unbound in host tests: the GPIO is never
-// polled and existing scenarios keep their exact behavior.
-app_reader_key_action_t app_settings_reader_up_action(void) {return APP_READER_KEY_NONE;}
-esp_err_t board_read_up_key(bool* pressed) {*pressed=false;return ESP_OK;}
+// 默认不绑定；前光回归按主循环帧注入真实上键按下/抬起。
+// Unbound by default; frontlight regressions inject up-key press/release levels by loop frame.
+app_reader_key_action_t app_settings_reader_up_action(void) {return up_key_bound?APP_READER_KEY_FRONTLIGHT:APP_READER_KEY_NONE;}
+esp_err_t board_read_up_key(bool* pressed) {*pressed=up_key_steps[step];return ESP_OK;}
 app_shutdown_style_t app_settings_shutdown_style(void) {return staged_shutdown ? APP_SHUTDOWN_STAGED : APP_SHUTDOWN_FULL;}
 bool ttf_font_path_is_builtin(const char*p) {(void)p;return !font_due&&!saved_sd_font;}
 bool ttf_font_ready(void) {return true;}
@@ -440,6 +440,7 @@ static void reset(void) {
     transfer_returns=false;
     haptic_pulses=haptic_stops=0;
     fl_ready=fl_on=false;fl_bri=40;fl_cct=50;fl_applies=fl_control_draws=fl_sweep_draws=fl_drag_pushes=fl_white_pushes=fl_gray_pushes=fl_key_gl=quick_gl_height=0;
+    up_key_bound=false;memset(up_key_steps,0,sizeof(up_key_steps));
     main_fast=main_water=false;shelf_exit_arms=0;idle_minutes=0;idle_locks=before_locks=lock_feedback_calls=lock_badges=wake_clean_requests=0;feedback_enabled=false;online_busy=false;
     nav_arms=nav_draws=nav_full_arms=nav_area_draws=0;nav_armed=NULL;
     main_source_visible=main_target_visible=true;
@@ -467,6 +468,15 @@ static void home_case(void) {
 }
 static bool product_menu_disabled(app_ctx_t *ctx) {(void)ctx;return false;}
 static void before_lock(app_ctx_t *ctx) {(void)ctx;++before_locks;}
+static app_redraw_t frontlight_lock_tick(app_ctx_t *ctx) {
+    (void)ctx;
+    if (step == 4) assert(!fl_on && fl_applies == 1);
+    if (step == 5) {
+        if (idle_minutes) time_offset += 60000000;
+        else { lock_due = true; time_offset += 3000000; }
+    }
+    return APP_REDRAW_NONE;
+}
 static bool main_first(app_ctx_t* ctx) {(void)ctx;return main_source_visible;}
 static bool main_second(app_ctx_t* ctx) {(void)ctx;return main_target_visible;}
 static void enter_subview(app_ctx_t* ctx) {enter(ctx);main_target_visible=false;}
@@ -1028,6 +1038,20 @@ int main(void) {
     // layer is already gone, so only the underlay page is re-rendered.
     assert(quick_draws==2&&quick_gl==2&&base_renders==4);
     puts("frontlight: fourth-circle switch expands the capsule card, slider rows, DU drag and release commit and whole-screen normalization on close passed");
+    // 真实上键关灯后，手动/自动锁屏的快捷层重置都不得把开灯缓存写回设置。
+    // After a real up-key switch-off, manual/idle lock resets must not persist the stale on preview.
+    for (unsigned idle = 0; idle < 2; ++idle) {
+        reset();fl_ready=fl_on=up_key_bound=true;time_step=100000;
+        // 上键轮询时钟跨 app_loop_run 保留，后续场景必须继续向前。
+        // Up-key polling retains its clock across app_loop_run, so later scenarios must advance it.
+        time_offset=(int64_t)(idle+1)*1000000000000LL;
+        first.on_tick=frontlight_lock_tick;first.on_before_lock=before_lock;
+        idle_minutes=idle?1:0;up_key_steps[3]=true;
+        for (unsigned i = 0; i < 7; ++i) add(0,0,0,0);
+        run();
+        assert(idle_locks==1&&before_locks==1&&fl_applies==1&&!fl_on);
+    }
+    puts("PASS: bound up-key turns the light off and manual/idle lock preserves the off setting");
     // 采样回放：快捷层展开的整页刷新期间快速点按，按下沿不能丢；一次点按只切换一次。
     // Sampler replay: a fast tap during the quick layer's opening refresh keeps its
     // press edge and toggles exactly once.

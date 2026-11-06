@@ -166,6 +166,51 @@ static void hold(int button, const app_desc_t *p) {
 }
 int main(void) {
     ctx = (app_ctx_t){.hl = &hl, .fb = fb, .touch = &touch};
+    // 锁屏、切页与读点错误会重置快捷层；实体键已改过设置时，旧预览不能写回。
+    // Lock, navigation and read errors reset the layer; stale previews must not overwrite a key change.
+    for (unsigned boundary = 0; boundary < 3; ++boundary) {
+        for (unsigned on = 0; on < 2; ++on) {
+            open_layer();
+            if (!on) tap(3);
+            (void)frame(true, true, false, 300, 700, 10, false);
+            (void)frame(false, false, true, 300, 700, 10, false);
+            assert(!app_quick_layer_is_open() && saved_on == (bool)on);
+            app_settings_set_frontlight_on(!on);
+            app_settings_set_frontlight_brightness(71);
+            app_settings_set_frontlight_cct(23);
+            assert(frontlight_apply(!on, 71, 23) == ESP_OK);
+            unsigned writes = settings_writes, applications = applies;
+            if (boundary == 0) app_quick_layer_reset();
+            else if (boundary == 1) assert(!app_quick_layer_cancel_input());
+            else app_quick_layer_init();
+            assert(saved_on == !on && saved_bri == 71 && saved_cct == 23);
+            assert(hw_on == saved_on && hw_bri == saved_bri && hw_cct == saved_cct);
+            assert(settings_writes == writes && applies == applications);
+            // 冷启动使用持久化开关，因此关灯后重启仍应关闭。
+            // Cold boot uses the persisted switch, so a light switched off must stay off after reboot.
+            hw_on = false;
+            assert(frontlight_apply(saved_on, saved_bri, saved_cct) == ESP_OK);
+            assert(hw_on == !on);
+        }
+    }
+    puts("PASS: stale closed-layer previews preserve key changes through lock/navigation reset, read error and reinit/cold-boot restore");
+    // 未松手的实际调节仍须由关闭、重置或读错提交；重复清理不能再次写设置。
+    // Close, reset and read errors still commit a live drag; repeated cleanup must not write again.
+    for (unsigned boundary = 0; boundary < 4; ++boundary) {
+        open_layer();
+        unsigned writes = settings_writes;
+        (void)frame(true, true, false, 600, 284, 10, true);
+        assert(hw_on && hw_bri != saved_bri && settings_writes == writes);
+        if (boundary == 0) app_quick_layer_reset();
+        else if (boundary == 1) assert(app_quick_layer_cancel_input());
+        else if (boundary == 2) {usb = true; release(); usb = false;}
+        else {error_once = 1;app_quick_layer_flush_frontlight(&ctx,current);}
+        assert(saved_on == hw_on && saved_bri == hw_bri && saved_cct == hw_cct);
+        assert(settings_writes == writes + 1);
+        (void)app_quick_layer_cancel_input();app_quick_layer_reset();
+        assert(settings_writes == writes + 1);
+    }
+    puts("PASS: pending slider changes survive reset, read error, USB close and display failure exactly once");
     app_quick_layer_init(); open_layer();
     unsigned p = pushes, a = applies, w = settings_writes;
     (void)frame(true, true, false, 100, 284, 10, true);

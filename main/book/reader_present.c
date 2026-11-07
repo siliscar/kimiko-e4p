@@ -108,7 +108,7 @@ reader_present_result_t reader_present_output(EpdiyHighlevelState *hl,
             if (err != EPD_DRAW_SUCCESS) goto done;
             result.footer_updated = true;
         }
-        if (request->fullscreen) {
+        if (request->fullscreen && request->progress_area.height > 0) {
             err = display_refresh_area(hl, DISPLAY_REFRESH_DETAIL, request->progress_area, DISPLAY_REFRESH_DEFAULT);
             if (err != EPD_DRAW_SUCCESS) goto done;
         }

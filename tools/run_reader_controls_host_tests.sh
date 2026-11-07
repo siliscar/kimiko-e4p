@@ -11,4 +11,5 @@ python3 tools/reader_controls_host_test.py
 python3 tools/reading_settings_host_test.py
 python3 tools/reader_indent_hold_host_test.py
 python3 tools/reader_chrome_host_test.py
+python3 tools/reader_body_paint_host_test.py
 python3 tools/reader_shake_host_test.py

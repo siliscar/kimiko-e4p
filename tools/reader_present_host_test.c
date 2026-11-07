@@ -136,6 +136,20 @@ int main(void) {
     reader_present_output(&hl, &r);
     assert(count == 2); expect(0, DIFF, &text, MODE_GL16, r.area);
     expect(1, DIFF, &E0470_WAVEFORM, MODE_GL16, r.progress_area);
+    // 隐藏后进度带已回收给正文，不得再次用进度波形驱动这些文字。
+    // A hidden strip belongs to the body and must not be driven again with the progress waveform.
+    for (int water = 0; water < 2; ++water) {
+        r = reset(); r.fullscreen = true; r.progress_area = (EpdRect){0,1216,684,0};
+        r.area = (EpdRect){0,80,684,1136}; r.water_turn_pending = water;
+        r.status_pending = true;
+        out = reader_present_output(&hl, &r);
+        assert(out.error == EPD_DRAW_SUCCESS && out.status_updated && count == (water ? 4u : 2u));
+        if (water) {
+            expect(1, WATER, NULL, E0470_TURN_BTT, r.area);
+            assert(calls[0].kind == TICK && calls[2].kind == TICK && tick == 13579);
+        } else expect(0, DIFF, &text, MODE_GL16, r.area);
+        expect(count-1, DIFF, &E0470_WAVEFORM, MODE_GL16, r.status_area);
+    }
     r = reset(); r.turn_pending = false; r.fullscreen = true;
     reader_present_output(&hl, &r); expect(0, DIFF, &page, MODE_GL16, r.area);
     r = reset(); r.turn_pending = false;

@@ -90,6 +90,7 @@ static unsigned app_settings_reader_full_pages(void){return 15;}
 static unsigned app_settings_reader_turn_effect(void){return 1;}
 static bool app_settings_reader_vertical_turn(void){return true;}
 static bool app_settings_reader_statusbar(void){return true;}
+static bool app_settings_reader_progress_bar(void){return true;}
 static bool app_settings_reader_hide_images(void){return false;}
 '''
 unit+=function('ui_text_box',kit).replace('void ui_text_box(', 'static void actual_text_box(')+'\n'
@@ -116,7 +117,7 @@ for name in ['s_font_card','s_weight_card','s_bookfont_card','s_layout_card','s_
     unit+=re.search(r'^#define '+name+r' .*',s,re.M)[0]+'\n'
 unit+=function('reader_panel_text_vc',book)+'\n'
 unit+=re.search(r'^#define KEY_SETTINGS_TOP .*',s,re.M)[0]+'\n'
-unit+='\n'.join(re.findall(r'^#define CHROME_ROW_.*',s,re.M))+'\n'
+unit+='\n'.join(re.findall(r'^#define CHROME_(?:ROW_.*|PROGRESS_ROW.*)',s,re.M))+'\n'
 unit+=r'''
 static int s_chrome_scroll,s_chrome_height[2]={144,121};
 typedef int app_reader_slot_item_t;

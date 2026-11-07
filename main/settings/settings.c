@@ -118,6 +118,7 @@ static void settings_write_close(nvs_handle_t handle) {
 #define NVS_KEY_CHROME_FOOTER_R "rd_ftr_r"
 #define NVS_KEY_CHROME_HEADER_H "rd_hdr_h"
 #define NVS_KEY_CHROME_FOOTER_H "rd_ftr_h"
+#define NVS_KEY_READER_PROGRESS "rd_progress"
 #define NVS_KEY_VERTICAL_TURN "rd_vertical"
 #define NVS_KEY_BLE_TURNER "ble_turn"
 #define NVS_KEY_SHELF_RECENT "shelf_recent"
@@ -220,6 +221,7 @@ static uint8_t s_reader_chrome[6] = {
     APP_READER_SLOT_CHAPTER, APP_READER_SLOT_BLANK, APP_READER_SLOT_PAGE_PROGRESS,
 };
 static bool s_reader_vertical_turn;
+static bool s_reader_progress_bar = true;
 static uint8_t s_reader_chrome_heights[2] = {APP_READER_HEADER_HEIGHT_DEFAULT, APP_READER_FOOTER_HEIGHT_DEFAULT};
 static bool reader_chrome_heights_valid(uint8_t header, uint8_t footer) {
     return header >= APP_READER_HEADER_HEIGHT_MIN && header <= APP_READER_HEADER_HEIGHT_MAX &&
@@ -484,6 +486,9 @@ void app_settings_init(void) {
         ? header : APP_READER_HEADER_HEIGHT_DEFAULT;
     s_reader_chrome_heights[1] = reader_chrome_heights_valid(APP_READER_HEADER_HEIGHT_DEFAULT, footer)
         ? footer : APP_READER_FOOTER_HEIGHT_DEFAULT;
+    uint8_t progress_bar = 1;
+    nvs_get_u8(h, NVS_KEY_READER_PROGRESS, &progress_bar);
+    s_reader_progress_bar = progress_bar != 0;
     bool migrate_reader_defaults = nvs_get_u8(h, NVS_KEY_READER_KEYS_V2, &keys_v2) != ESP_OK || keys_v2 != 1;
     bool old_default_hold = migrate_reader_defaults && s_reader_hold_action == APP_READER_KEY_REFRESH &&
         s_reader_keys[0] == APP_READER_KEY_PREV && s_reader_keys[1] == APP_READER_KEY_TOOLS &&
@@ -1109,10 +1114,21 @@ bool app_settings_set_reader_chrome_heights(uint8_t header, uint8_t footer) {
     }
     return err == ESP_OK;
 }
+bool app_settings_reader_progress_bar(void) { return s_reader_progress_bar; }
+bool app_settings_set_reader_progress_bar(bool on) {
+    if (s_reader_progress_bar == on) return true;
+    nvs_handle_t h;
+    if (settings_write_open(&h) != ESP_OK) return false;
+    esp_err_t err = nvs_set_u8(h, NVS_KEY_READER_PROGRESS, on ? 1 : 0);
+    if (err == ESP_OK) err = nvs_commit(h);
+    settings_write_close(h);
+    if (err == ESP_OK) s_reader_progress_bar = on;
+    return err == ESP_OK;
+}
 bool app_settings_set_reader_chrome_default(void) {
     if (!memcmp(s_reader_chrome, s_reader_chrome_defaults, sizeof(s_reader_chrome)) &&
         s_reader_chrome_heights[0] == APP_READER_HEADER_HEIGHT_DEFAULT &&
-        s_reader_chrome_heights[1] == APP_READER_FOOTER_HEIGHT_DEFAULT) return true;
+        s_reader_chrome_heights[1] == APP_READER_FOOTER_HEIGHT_DEFAULT && s_reader_progress_bar) return true;
     nvs_handle_t h;
     esp_err_t err = settings_write_open(&h);
     if (err != ESP_OK) return false;
@@ -1120,12 +1136,14 @@ bool app_settings_set_reader_chrome_default(void) {
         err = nvs_set_u8(h, s_reader_chrome_names[i], s_reader_chrome_defaults[i]);
     if (err == ESP_OK) err = nvs_set_u8(h, NVS_KEY_CHROME_HEADER_H, APP_READER_HEADER_HEIGHT_DEFAULT);
     if (err == ESP_OK) err = nvs_set_u8(h, NVS_KEY_CHROME_FOOTER_H, APP_READER_FOOTER_HEIGHT_DEFAULT);
+    if (err == ESP_OK) err = nvs_set_u8(h, NVS_KEY_READER_PROGRESS, 1);
     if (err == ESP_OK) err = nvs_commit(h);
     settings_write_close(h);
     if (err == ESP_OK) {
         memcpy(s_reader_chrome, s_reader_chrome_defaults, sizeof(s_reader_chrome));
         s_reader_chrome_heights[0] = APP_READER_HEADER_HEIGHT_DEFAULT;
         s_reader_chrome_heights[1] = APP_READER_FOOTER_HEIGHT_DEFAULT;
+        s_reader_progress_bar = true;
     }
     return err == ESP_OK;
 }
@@ -1445,6 +1463,16 @@ static bool backup_home_regions_valid(const settings_backup_home_regions_t *regi
     for (unsigned i = 0; i < 4; ++i) stored |= (uint32_t)regions->checksum[i] << (8 * i);
     return app_home_components_value_valid(regions->value) && stored == backup_home_regions_checksum(regions);
 }
+// v34 追加进度条显隐；旧备份默认显示。/ V34 appends progress visibility; old backups show it.
+typedef struct { uint8_t on, checksum[4]; } settings_backup_progress_bar_t;
+static uint32_t backup_progress_bar_checksum(const settings_backup_progress_bar_t *bar) {
+    return (2166136261u ^ bar->on) * 16777619u;
+}
+static bool backup_progress_bar_valid(const settings_backup_progress_bar_t *bar) {
+    uint32_t stored = 0;
+    for (unsigned i = 0; i < 4; ++i) stored |= (uint32_t)bar->checksum[i] << (8 * i);
+    return bar->on <= 1 && stored == backup_progress_bar_checksum(bar);
+}
 static uint32_t backup_chrome_checksum(const settings_backup_chrome_t *chrome) {
     uint32_t hash = 2166136261u;
     for (unsigned i = 0; i < 6; ++i) hash = (hash ^ chrome->items[i]) * 16777619u;
@@ -1549,10 +1577,11 @@ static bool backup_home_valid(const settings_backup_home_t *v) {
 static unsigned backup_version(const settings_backup_v1_t *backup) {
     if (memcmp(backup->magic, "PICOSET", 7)) return 0;
     unsigned char c = backup->magic[7];
-    // W 追加 v32 信息栏高度；X 追加 v33 首页布局。/ W appends v32 bar heights; X appends v33 Home regions.
+    // W 追加 v32 信息栏高度；X 追加 v33 首页布局；Y 追加 v34 进度条显隐。
+    // W appends v32 bar heights; X appends v33 Home regions; Y appends v34 progress visibility.
     // A-F 为旧版；G/H 为 rc9x；K 为上游 rc96/97；L 为本地旧布局；M/N/O/P/Q 为本合并格式；R 追加 v27；S 追加 v28；T 追加 v29；U 追加 v30；V 追加 v31。
     // A-F are legacy; G/H are rc9x; K is upstream rc96/97; L is the old local layout; M/N/O/P/Q are this merge; R appends v27; S appends v28; T appends v29; U appends v30; V appends v31.
-    return c >= '1' && c <= '9' ? c - '0' : c == 'A' ? 10 : c == 'B' ? 11 : c == 'C' ? 12 : c == 'D' ? 13 : c == 'E' ? 14 : c == 'F' ? 15 : c == 'G' ? 16 : c == 'H' ? 17 : c == 'I' ? 18 : c == 'J' ? 19 : c == 'K' ? 20 : c == 'L' ? 21 : c == 'M' ? 22 : c == 'N' ? 23 : c == 'O' ? 24 : c == 'P' ? 25 : c == 'Q' ? 26 : c == 'R' ? 27 : c == 'S' ? 28 : c == 'T' ? 29 : c == 'U' ? 30 : c == 'V' ? 31 : c == 'W' ? 32 : c == 'X' ? 33 : 0;
+    return c >= '1' && c <= '9' ? c - '0' : c == 'A' ? 10 : c == 'B' ? 11 : c == 'C' ? 12 : c == 'D' ? 13 : c == 'E' ? 14 : c == 'F' ? 15 : c == 'G' ? 16 : c == 'H' ? 17 : c == 'I' ? 18 : c == 'J' ? 19 : c == 'K' ? 20 : c == 'L' ? 21 : c == 'M' ? 22 : c == 'N' ? 23 : c == 'O' ? 24 : c == 'P' ? 25 : c == 'Q' ? 26 : c == 'R' ? 27 : c == 'S' ? 28 : c == 'T' ? 29 : c == 'U' ? 30 : c == 'V' ? 31 : c == 'W' ? 32 : c == 'X' ? 33 : c == 'Y' ? 34 : 0;
 }
 
 static void backup_erase_secret(void *ptr, size_t size) {
@@ -1646,7 +1675,8 @@ esp_err_t app_settings_backup_save(void) {
     // v31: appends the six header/footer chrome slots after the v30 tail.
     // v32：在 v31 尾部追加页眉页脚高度。/ V32 appends header/footer heights to v31.
     // v33：追加首页上下组件，不改变既有尾块顺序。/ V33 appends Home regions without reordering previous blocks.
-    memcpy(backup.magic, "PICOSETX", sizeof(backup.magic));
+    // v34：追加页脚和全屏进度条显隐。/ V34 appends footer/full-screen progress visibility.
+    memcpy(backup.magic, "PICOSETY", sizeof(backup.magic));
     uint8_t *f = backup.flags;
     f[BK_SLEEP] = s_sleep;
     f[BK_PICKUP] = s_pickup_wake;
@@ -1808,6 +1838,10 @@ esp_err_t app_settings_backup_save(void) {
     uint32_t regions_hash = backup_home_regions_checksum(&regions);
     for (unsigned i = 0; i < 4; ++i) regions.checksum[i] = (uint8_t)(regions_hash >> (8 * i));
     if (ok) ok = fwrite(&regions, 1, sizeof(regions), file) == sizeof(regions);
+    settings_backup_progress_bar_t progress_bar = {.on = s_reader_progress_bar ? 1 : 0};
+    uint32_t progress_hash = backup_progress_bar_checksum(&progress_bar);
+    for (unsigned i = 0; i < 4; ++i) progress_bar.checksum[i] = (uint8_t)(progress_hash >> (8 * i));
+    if (ok) ok = fwrite(&progress_bar, 1, sizeof(progress_bar), file) == sizeof(progress_bar);
     backup_erase_secret(&wifi, sizeof(wifi));
     if (ok) ok = book_history_backup_write(file) == ESP_OK;
     if (ok) ok = fflush(file) == 0;
@@ -1907,6 +1941,7 @@ esp_err_t app_settings_backup_restore(void) {
     settings_backup_margins_t margins = {0};
     settings_backup_shake_t shake = {.on = 0};
     settings_backup_home_regions_t regions = {0};
+    settings_backup_progress_bar_t progress_bar = {.on = 1};
     settings_backup_chrome_heights_t heights = {
         .header = APP_READER_HEADER_HEIGHT_DEFAULT, .footer = APP_READER_FOOTER_HEIGHT_DEFAULT};
     settings_backup_chrome_t chrome = {.items = {
@@ -2010,6 +2045,7 @@ esp_err_t app_settings_backup_restore(void) {
     if (ok && version >= 31) ok = fread(&chrome, 1, sizeof(chrome), file) == sizeof(chrome) && backup_chrome_valid(&chrome);
     if (ok && version >= 32) ok = fread(&heights, 1, sizeof(heights), file) == sizeof(heights) && backup_chrome_heights_valid(&heights);
     if (ok && version >= 33) ok = fread(&regions, 1, sizeof(regions), file) == sizeof(regions) && backup_home_regions_valid(&regions);
+    if (ok && version >= 34) ok = fread(&progress_bar, 1, sizeof(progress_bar), file) == sizeof(progress_bar) && backup_progress_bar_valid(&progress_bar);
     // 旧备份没有本块：chrome 保持默认值并照常写回，与其他设置的恢复语义一致。
     // Older backups lack the block: chrome keeps its defaults and is written back like every other setting.
     bool has_history = ok && version >= 6;
@@ -2094,6 +2130,7 @@ esp_err_t app_settings_backup_restore(void) {
         err = nvs_set_u8(h, s_reader_chrome_names[i], chrome.items[i]);
     if (err == ESP_OK) err = nvs_set_u8(h, NVS_KEY_CHROME_HEADER_H, heights.header);
     if (err == ESP_OK) err = nvs_set_u8(h, NVS_KEY_CHROME_FOOTER_H, heights.footer);
+    if (err == ESP_OK) err = nvs_set_u8(h, NVS_KEY_READER_PROGRESS, progress_bar.on);
     if (err == ESP_OK && version >= 33) err = nvs_set_u8(h, "home_regions", regions.value);
     if (err == ESP_OK) err = nvs_set_u8(h, NVS_KEY_UP_ACTION, up_action.action);
     if (err == ESP_OK) err = nvs_set_u8(h, NVS_KEY_BOOK_FONTS, book_fonts.on);
@@ -2172,6 +2209,7 @@ esp_err_t app_settings_backup_restore(void) {
     memcpy(s_reader_chrome, chrome.items, sizeof(s_reader_chrome));
     s_reader_chrome_heights[0] = heights.header;
     s_reader_chrome_heights[1] = heights.footer;
+    s_reader_progress_bar = progress_bar.on != 0;
     s_book_weight = fine_weight/APP_BOOK_WEIGHT_SUBSTEPS+2;
     s_book_weight_fine = fine_weight;
     s_book_antialias = antialias;

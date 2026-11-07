@@ -15,7 +15,10 @@ u=r'''
 #include <stdio.h>
 #define UI_LOCK_WIDTH 684
 #define UI_BAR_TOP 1120
+#define UI_BAR_H 96
 #define READER_FULLSCREEN_PROGRESS_TOP 1198
+#define UI_LOCK_HEIGHT 1216
+#define READER_FOOTER_PROGRESS_SPACE 19
 #define BOOK_MARGIN_MIN 0
 #define BOOK_MARGIN_MAX 96
 #define BOOK_MARGIN_STEP 6
@@ -23,6 +26,7 @@ u=r'''
 enum { MARGIN_LEFT, MARGIN_RIGHT, MARGIN_TOP, MARGIN_BOTTOM, MARGIN_COUNT };
 typedef struct {int x,y,width,height;} EpdRect;
 static bool s_reader_fullscreen;
+static bool s_reader_progress_bar=true;
 static int s_margin[MARGIN_COUNT];
 static bool app_settings_reader_statusbar(void){return true;}
 static int s_chrome_height[2]={80,57};
@@ -36,7 +40,7 @@ for name in ('APP_BOOK_TRACK_MIN','APP_BOOK_TRACK_MAX','APP_BOOK_TRACK_COUNT','A
 for name in ('app_settings_book_paragraph_value','app_settings_book_paragraph_level'):
     u+=function(name,r/'main/settings/settings.c')+'\n'
 u+=function('slider_index',f)+'\n'
-for n in ('body_rect_for_tracking','reader_margin_level','reader_margin_value','reader_margin_input'):
+for n in ('reader_footer_height','body_rect_for_tracking','reader_margin_level','reader_margin_value','reader_margin_input'):
     u+=function(n,f)+'\n'
 for n in ('app_settings_book_indent_adjust','app_settings_set_book_indent_adjust'):
     u+=function(n,r/'main/settings/settings.c')+'\n'

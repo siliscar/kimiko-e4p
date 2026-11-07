@@ -284,11 +284,16 @@ bool app_settings_set_reader_chrome_item(unsigned bar, unsigned slot, app_reader
 uint8_t app_settings_reader_chrome_height(unsigned bar);
 /// 同时保存两条高度；无效值或保存失败不改变内存。/ Save both heights; invalid values or failed writes leave memory unchanged.
 bool app_settings_set_reader_chrome_heights(uint8_t header, uint8_t footer);
+/// 页脚及全屏底部进度条，默认显示；阅读页关闭后回收预留带并重排，保留页脚文字与用户边距。
+/// Footer/full-screen progress, shown by default; the reader reclaims its hidden band and reflows while retaining footer text and user margins.
+bool app_settings_reader_progress_bar(void);
+/// 保存失败返回 false，保持原显示状态。/ Failed persistence returns false and keeps visibility unchanged.
+bool app_settings_set_reader_progress_bar(bool on);
 /// 六槽一次提交恢复默认布局：页眉 书名/时间/电量图标，页脚 章节名/空/页码·进度。
 /// Restore all six slots to the default layout in one commit: header title/clock/battery icon,
 /// footer chapter/blank/page·progress.
-/// 同时恢复默认高度；保存失败返回 false，内存布局不变。
-/// Also restore default heights; return false on failure, preserving the in-memory layout.
+/// 同时恢复默认高度并显示进度条；保存失败返回 false，内存布局不变。
+/// Also restore default heights and show progress; failure preserves the in-memory layout.
 bool app_settings_set_reader_chrome_default(void);
 /// 旧长按设置API保留用于历史备份兼容。/ Retained legacy hold APIs for historical backup compatibility.
 bool app_settings_reader_hold_refresh(void);

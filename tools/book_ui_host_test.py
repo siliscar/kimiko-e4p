@@ -82,6 +82,10 @@ typedef struct app_desc {int unused;} app_desc_t;
 typedef struct {bool touched;} test_touch_t;
 typedef struct {int leaf;bool request_menu,consumed;int64_t now_ms;uint8_t *fb;const app_desc_t *request_app;test_touch_t *touch;void *acc;} app_ctx_t;
 typedef enum {APP_REDRAW_PAGE,APP_REDRAW_AREA,APP_REDRAW_NONE,APP_REDRAW_FULL} app_redraw_t;
+static struct {bool active;} s_dictionary_selection;
+static void dictionary_cancel(void){s_dictionary_selection.active=false;}
+static app_redraw_t dictionary_dismiss(void){dictionary_cancel();return APP_REDRAW_PAGE;}
+static void book_layout_enable_selection(bool enabled){(void)enabled;}
 typedef struct {int x,y,width,height;} EpdRect;
 static EpdRect ui_bar_rect(int i,int count){int width=(508-(count-1)*12)/count;return(EpdRect){40+i*(width+12),1096,width,96};}
 static bool ui_rect_hit(EpdRect r,int x,int y){return x>=r.x&&x<r.x+r.width&&y>=r.y&&y<r.y+r.height;}
@@ -226,6 +230,7 @@ static unsigned percent(size_t page){return (unsigned)page*20;}
 static int book_progress_save(const char* p,const book_progress_t* value){(void)p;(void)value;test_save_calls++;book_progress_bump();return test_save_error;}
 static int book_progress_set_last_path(const char* p){test_last_calls++;if(!test_last_error)snprintf(test_last_path,sizeof(test_last_path),"%s",p);book_progress_bump();return test_last_error;}
 static void save_progress(void);
+static bool book_excerpt_flush(const char *path){assert(path&&*path);return true;}
 static void track_ticket_stats(app_ctx_t *ctx){(void)ctx;}
 static void invalidate_prep(void){}
 static void invalidate_covers(void){}

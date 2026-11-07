@@ -17,6 +17,11 @@ import time
 
 ROOT = Path(__file__).resolve().parents[1]
 SUITES = {
+<<<<<<< HEAD
+=======
+    "excerpt": [sys.executable, "tools/book_excerpt_host_test.py"],
+    "dictionary": ["bash", "tools/run_dictionary_host_tests.sh"],
+>>>>>>> d4212af (新增（书摘）：随已显示阅读进度更新首页短句)
     "flash_fast": [sys.executable, "tools/flash_fast_host_test.py"],
     "weather": [sys.executable, "tools/weather_host_test.py"],
     "journal": [sys.executable, "tools/reading_journal_host_test.py"],

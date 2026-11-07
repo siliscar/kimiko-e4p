@@ -72,7 +72,7 @@ static char s_message[256],s_latest_path[BOOK_STORE_PATH_MAX],s_reader_notice[12
 static char s_chapter_heading_title[128],s_chapter_heading_label[32];
 static bool s_reader_return_home,s_reader_fullscreen,s_requested_fullscreen,s_book_fonts_applied;
 static bool s_shelf_key_mode,s_shelf_key_paint_pending,s_save_failed;
-static bool s_water_turn_pending,s_reader_turn_pending,s_reader_text_frame,s_reader_stable_frame;
+static bool s_water_turn_pending,s_reader_turn_pending,s_reader_text_frame,s_reader_stable_frame,s_excerpt_forward;
 static bool s_reader_entry_full,s_reader_image_refresh_pending,s_clear_confirm,s_batch_confirm;
 static int s_shelf_key_delta,s_shelf_key_pressed,s_px,s_view,s_reader_panel;
 static unsigned s_stats_last_ms,s_stats_activity_ms,s_session_read_ms,s_session_turns,s_turns,s_unsaved;
@@ -143,6 +143,14 @@ static void app_reading_journal_record(const char *path,const char *title,uint32
 }
 static void e0470_page_turn_release(void){}
 static void invalidate_prep(void){assert(!prefetch_borrowed);}
+<<<<<<< HEAD
+=======
+static void dictionary_cancel(void){}
+static unsigned excerpt_begins;
+static void book_excerpt_begin(const char *path){assert(!prefetch_borrowed&&s_reader_session.content.utf8&&!strcmp(path,s_reader_session.book.path));++excerpt_begins;}
+static bool book_excerpt_flush(const char *path){(void)path;return true;}
+static void book_excerpt_reset(void){}
+>>>>>>> d4212af (新增（书摘）：随已显示阅读进度更新首页短句)
 static void reader_bind_chapter(void){s_text=s_reader_session.content.utf8;}
 static void release_page_images(void){s_page_images=NULL;}
 bool book_progress_load(const char *path,uint32_t size,book_progress_t *out){(void)path;++persist_calls;event('P');if(!has_persisted||persisted.file_size!=size)return false;*out=persisted;return true;}
@@ -160,8 +168,8 @@ static void save_progress(void){event('S');if(!*s_reader_session.book.path)retur
 
 CASES = r'''
 static bool open_book_impl(app_ctx_t *ctx,const char *path){
-    unsigned before=journal_records;bool opened=open_book_impl_actual(ctx,path);
-    assert(journal_records-before==(unsigned)opened);return opened;
+    unsigned before=journal_records, excerpts=excerpt_begins;bool opened=open_book_impl_actual(ctx,path);
+    assert(journal_records-before==(unsigned)opened&&excerpt_begins-excerpts==(unsigned)opened);return opened;
 }
 static bool pending_reserve(const char *path){++reserve_calls;event('R');fail_alloc=fail_reserve==(int)reserve_calls;bool ok=pending_reserve_actual(path);fail_alloc=false;return ok;}
 static void reset(void){

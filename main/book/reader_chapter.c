@@ -7,7 +7,6 @@
  */
 #include "reader_chapter.h"
 #include "book_source.h"
-#include "book_excerpt.h"
 #include <stdio.h>
 #include <string.h>
 
@@ -103,7 +102,6 @@ reader_chapter_result_t reader_chapter_apply_locked(reader_session_t *session,
         bool restored = previous->utf8 && reader_session_build_layout(session, previous, rect, px);
         return restored ? READER_CHAPTER_RESTORED : READER_CHAPTER_LOST_LAYOUT;
     }
-    book_excerpt_offer(session->book.path, &candidate->content);
     reader_session_adopt_chapter(session, &candidate->content);
     return READER_CHAPTER_APPLIED;
 }

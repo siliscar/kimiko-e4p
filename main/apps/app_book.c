@@ -296,6 +296,7 @@ static bool s_reader_text_frame;
 // migrates per gray pair, so backgrounds need no exclusion; the softened text waveform
 // still requires the pure-text s_reader_text_frame.
 static bool s_reader_stable_frame;
+static bool s_excerpt_forward;
 // 工具栏开关只改底部一条带；这一帧只对带内做 GL16 差分，脏区膨胀负责擦掉进度条边缘。
 // A tools toggle changes only the bottom band; that frame runs a GL16 differential inside
 // the band, with dirty-mask dilation erasing the progress bar edges.
@@ -1241,6 +1242,20 @@ static size_t reader_page_offset(size_t page) {
         off = s_jump_offset;
     return off;
 }
+static void reader_excerpt_reposition(void) {
+    size_t page = s_reader_session.position.page;
+    book_excerpt_reposition(s_reader_session.position.chapter, reader_page_offset(page),
+        book_layout_page_start_offset(page + 1));
+    s_excerpt_forward = false;
+}
+static void reader_excerpt_presented(bool body_ok, bool body_updated) {
+    if (body_ok && body_updated) {
+        size_t page = s_reader_session.position.page;
+        book_excerpt_observe(reader_session_content(&s_reader_session), s_reader_session.position.chapter,
+            reader_page_offset(page), book_layout_page_start_offset(page + 1), s_excerpt_forward);
+    }
+    s_excerpt_forward = false;
+}
 static unsigned percent(size_t page) {
     uint32_t total = book_total_bytes();
     if (!total) return 0;
@@ -1691,6 +1706,7 @@ static void draw_bulk(uint8_t* fb, int leaf) {
 }
 static void save_progress(void) {
     if (!s_text || !s_reader_session.book.path[0] || !book_layout_page_count()) return;
+    (void)book_excerpt_flush(s_reader_session.book.path);
     bool was_failed = s_save_failed;
     pending_progress_t* pending = pending_find(s_reader_session.book.path);
     if (!pending) { s_save_failed = true; return; }
@@ -4045,6 +4061,12 @@ static bool present(app_ctx_t* ctx, app_redraw_t redraw) {
     const bool reader_frame_ok = err == EPD_DRAW_SUCCESS && s_view == READING && s_text &&
         s_reader_panel == READER_PANEL_NONE && !s_toolbar && !s_clear_confirm &&
         book_layout_page_image_count(s_reader_session.position.page) == 0;
+    reader_excerpt_presented(reader_frame_ok && reader_image_slots(s_reader_session.position.page) == 0 &&
+        !s_reader_notice[0] && !s_dictionary_notice_until, !tools_band &&
+        (redraw == APP_REDRAW_PAGE || redraw == APP_REDRAW_FULL ||
+         (s_area.x <= output_request.body_area.x && s_area.y <= output_request.body_area.y &&
+          s_area.x + s_area.width >= output_request.body_area.x + output_request.body_area.width &&
+          s_area.y + s_area.height >= output_request.body_area.y + output_request.body_area.height)));
     s_reader_text_frame = reader_frame_ok && !app_settings_book_background_path()[0];
     s_reader_stable_frame = reader_frame_ok;
     s_reader_cleanup = false;
@@ -4159,6 +4181,8 @@ static void reader_bind_chapter(void) {
     s_image_count = content->image_count;
 }
 static void free_book(void) {
+    (void)book_excerpt_flush(s_reader_session.book.path);
+    book_excerpt_reset(); s_excerpt_forward = false;
     flush_ticket_stats();
     (void)app_reading_journal_flush();
     e0470_page_turn_release();
@@ -4596,6 +4620,7 @@ static bool open_book_impl(app_ctx_t* ctx, const char* path) {
         return false;
     }
     if (result == READER_OPEN_CONTENT_FAILED) return false;
+    book_excerpt_begin(s_reader_session.book.path);
     s_view = READING;
     s_reader_entry_full = true;
     s_reader_image_refresh_pending = !app_settings_reader_hide_images() &&
@@ -5233,6 +5258,7 @@ static bool reader_turn_load(void *context, size_t chapter, bool last) {
 }
 
 static app_redraw_t turn_page(app_ctx_t* ctx, int dir) {
+    s_excerpt_forward = false;
 #if CONFIG_READER_PERF
     reader_perf_begin("turn");
     READER_PERF_SCOPE(READER_PERF_ACTION);
@@ -5263,6 +5289,7 @@ static app_redraw_t turn_page(app_ctx_t* ctx, int dir) {
     bool chrome_changed = reader_turn_chrome(ctx);
     if (!s_text) return APP_REDRAW_PAGE;
     s_jump_offset = SIZE_MAX;
+    if (dir < 0) reader_excerpt_reposition();
     s_last_turn_ms = s_stats_activity_ms = ctx->now_ms;
     // 翻页提示高压保持 15 秒：连续阅读期间电源轨不因 100ms 空闲关断，下一页免上电序列；
     // 停止翻页后窗口到期照常断电，待机功耗不受影响。
@@ -5303,6 +5330,7 @@ static app_redraw_t turn_page(app_ctx_t* ctx, int dir) {
     // 换章页脚恢复默认 GL16 清理；普通页脚仍走短 DU，整屏清理不重复输出页脚。
     // Restore default GL16 cleanup for chapter footers; ordinary footers use short DU and full cleanup never replays them.
     s_reader_footer_strong = effects.footer_strong;
+    s_excerpt_forward = dir > 0;
     return chrome_changed ? APP_REDRAW_PAGE : redraw;
 }
 static void reader_reflow_begin(void) {
@@ -5814,6 +5842,7 @@ static app_redraw_t reader_panel_action(app_ctx_t* ctx, uint16_t x, uint16_t y) 
                     reader_bookmark_entry_t mark = marks.entries[newest];
                     if (s_bookmark_edit) s_bookmark_selected ^= UINT32_C(1) << newest;
                     else if (mark.chapter < book_chapter_count() && load_chapter(ctx, mark.chapter, mark.byte_off, false)) {
+                        reader_excerpt_reposition();
                         s_reader_panel = READER_PANEL_NONE;
                         save_progress();
                     }
@@ -6485,6 +6514,7 @@ static app_redraw_t action_at(app_ctx_t* ctx, uint16_t x, uint16_t y) {
             set_reader_view(READING);
             if (load_chapter_at(ctx, chapter, 0, false, book_navigation_anchor((size_t)target),
                                 book_navigation_source_offset((size_t)target))) {
+                reader_excerpt_reposition();
                 s_selected_toc = (size_t)target;
                 char entry_title[sizeof(s_reader_session.book.chapter_title)];
                 if (book_navigation_title((size_t)target, entry_title, sizeof(entry_title)) == ESP_OK)
@@ -6752,6 +6782,7 @@ static void book_on_exit(app_ctx_t* ctx) {
 // 先停止使用旧卡句柄与字体预渲染，主循环随后切换内置字体。
 // Stop old-card handles and font preparation before the loop switches to the builtin font.
 static void book_on_media_lost(app_ctx_t* ctx) {
+    book_excerpt_reset(); s_excerpt_forward = false;
     category_reset();
     s_shelf_selecting=false;s_category_result[0]=0;book_collection_drop_undo(&s_collection);
     middle_pending_clear();

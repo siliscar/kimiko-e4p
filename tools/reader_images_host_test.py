@@ -172,7 +172,7 @@ static void epd_draw_pixel(int x,int y,uint8_t gray,uint8_t *fb){
 static void ui_text_vc(uint8_t *fb,int x,int y,int px,const char *text,int align,bool inv){
  (void)fb;(void)align;(void)inv;assert(x>=body.x&&x<=body.x+body.width&&y-px/2>=body.y&&y+px/2<=body.y+body.height&&text);++notices;
 }
-void book_excerpt_offer(const char *path,const html_text_t *text){(void)path;(void)text;}
+static void dictionary_cancel(void){}
 static char *s_text;
 static blk_t *s_blocks;
 static html_run_t *s_runs;

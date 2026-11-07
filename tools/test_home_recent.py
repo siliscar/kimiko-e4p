@@ -43,6 +43,21 @@ static bool s_books_cache_valid,s_cached_sd_present,s_cached_sd_mounted,s_scan_p
 static unsigned s_cached_store_revision,s_cover_generation;
 static char s_cached_books_dir[128],s_cached_last_path[BOOK_STORE_PATH_MAX];
 static bool s_clock_pending,s_press_pending;
+static bool s_streak_pending,s_weather_tomorrow[2];
+static unsigned s_widget_dirty;
+static int s_streak;
+typedef struct {bool enabled;} weather_t;
+static weather_t weather;
+enum {APP_HOME_WIDGET_WEATHER};
+static void app_weather_init(void){}
+static void app_home_components_init(bool on){(void)on;}
+static weather_t *app_weather_view(void){return &weather;}
+static bool app_reading_journal_poll(void){return false;}
+static const void *app_reading_journal_model(void){return NULL;}
+static const void *app_reading_journal_today(void){return NULL;}
+static int reading_journal_streak_view(const void *model,const void *today){(void)model;(void)today;return 0;}
+static bool app_home_has_widget(int widget){(void)widget;return false;}
+static bool ui_weather_prepare(void){return true;}
 static uint32_t s_cached_progress_revision=UINT32_MAX;
 static int s_cover_next,scans,refreshes,probes;
 static char latest[BOOK_STORE_PATH_MAX];
@@ -57,14 +72,18 @@ static unsigned book_cover_jobs_begin(void){return 1;}
 static uint32_t progress_serial;
 static uint32_t book_progress_revision(void){return ++progress_serial;}
 static void avatar_prepare_state(void){}
-static void refresh_excerpt(void){}
+static char s_excerpt[240];
+static const char *quote="old excerpt";
+static unsigned excerpt_loads;
+static home_book_t *featured(void){return &s_current;}
+static bool book_excerpt_load(const char *path,char *out){assert(!strcmp(path,latest));++excerpt_loads;snprintf(out,sizeof(s_excerpt),"%s",quote);return true;}
 static void rp_boot_mark(const char *name){(void)name;}
 static void scan_books(void){++scans;snprintf(s_current.path,sizeof(s_current.path),"%s",latest);}
 static void refresh_progress(void){++refreshes;}
 static void restore_cover_cache(void){}
 static void board_sd_start_probe(void){++probes;}
 '''
-UNIT += function("remember_scan_state") + "\n" + function("on_enter")
+UNIT += function("remember_scan_state") + "\n" + function("refresh_excerpt") + "\n" + function("on_enter")
 UNIT += r'''
 int main(void){
     app_ctx_t ctx={0};
@@ -72,8 +91,10 @@ int main(void){
     assert(scans==1&&probes==1&&!strcmp(s_current.path,latest));
     strcpy(latest,"/sdcard/books/new.epub");on_enter(&ctx);
     assert(scans==2&&probes==1&&!s_scan_pending&&!strcmp(s_current.path,latest));
+    quote="new excerpt";
     on_enter(&ctx);
     assert(scans==2&&refreshes==1&&probes==1);
+    assert(excerpt_loads==3&&!strcmp(s_excerpt,quote));
     latest[0]=0;on_enter(&ctx);
     assert(scans==3&&!s_current.path[0]);
     puts("home_recent: latest book invalidates the home cache without an SD reprobe");
@@ -84,5 +105,5 @@ with tempfile.TemporaryDirectory(prefix="home-recent-") as temp:
     source = Path(temp) / "test.c"
     binary = Path(temp) / "test"
     source.write_text(UNIT, encoding="utf-8")
-    subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", str(source), "-o", str(binary)], check=True)
+    subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-fsanitize=address,undefined", str(source), "-o", str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

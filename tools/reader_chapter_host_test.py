@@ -108,9 +108,8 @@ bool book_layout_build_blocks(const char *text, size_t len, const blk_t *table,
     return true;
 }
 void book_excerpt_offer(const char *path, const html_text_t *text) {
-    assert(locked && !prefetch_borrowed && !strcmp(path, "test.epub"));
-    assert(text == &active_candidate->content && text->utf8 == layout_text);
-    assert(session.content.utf8 != text->utf8 && session.position.chapter == 7);
+    /* 未显示的候选章不能产生书摘。/ An undisplayed candidate must never offer an excerpt. */
+    (void)path; (void)text;
     ++excerpts;
 }
 static void restore_images(void *ctx) {
@@ -171,6 +170,7 @@ int main(void) {
     reader_chapter_t initial = read_candidate();
     assert(initial.content.runs && initial.content.links && initial.content.anchors && initial.content.images);
     assert(apply(&initial) == READER_CHAPTER_APPLIED && !initial.content.utf8);
+    assert(!excerpts);
     initial_live = live;
     char *old_text = session.content.utf8;
     unsigned old_builds = builds, old_excerpts = excerpts;

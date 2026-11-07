@@ -37,8 +37,8 @@ esp_err_t reader_chapter_read(reader_chapter_t *out, size_t chapter, const char 
 /// Caller holds the draw lock, has joined prefetch and applied candidate heading/image context; both rollback hooks are required.
 /// 失败按图片上下文、候选释放、题头几何、旧布局的顺序恢复；无旧正文时返回 LOST_LAYOUT。
 /// Failure restores image context, frees the candidate, restores heading geometry, then rebuilds old layout; no old text returns LOST_LAYOUT.
-/// 成功先提供摘录再交接章节；位置、页面借用、图片缓存和解锁仍由调用方按原顺序处理。
-/// Success offers the excerpt then adopts the chapter; callers retain ordered position, page borrows, image-cache and unlock handling.
+/// 成功交接章节；位置、页面借用、图片缓存和解锁仍由调用方按原顺序处理，摘句只在显示成功后进行。
+/// Success adopts the chapter; callers retain ordered position, page borrows, image-cache and unlock handling, extracting only after successful output.
 reader_chapter_result_t reader_chapter_apply_locked(reader_session_t *session,
                                                    reader_chapter_t *candidate,
                                                    EpdRect rect, int px,

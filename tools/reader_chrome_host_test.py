@@ -13,6 +13,9 @@ book = ROOT / 'main/apps/app_book.c'
 source = chrome.read_text()
 page = book.read_text()
 unit = r'''
+#define READER_WIDTH 684
+#define READER_HEIGHT 1216
+#define READER_BAR_TOP 1096
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -300,6 +303,9 @@ with tempfile.TemporaryDirectory(dir=ROOT / 'build') as folder:
 # Reuse the layout test's font fixture with real reader geometry and the real paginator.
 layout_unit = (ROOT / 'tools/book_layout_host_test.c').read_text().split('static void session_layout_lifecycle(void) {')[0]
 layout_unit += r'''
+#define READER_WIDTH 684
+#define READER_HEIGHT 1216
+#define READER_BAR_TOP 1096
 #define UI_LOCK_WIDTH 684
 #define UI_LOCK_HEIGHT 1216
 #define UI_BAR_TOP 1096

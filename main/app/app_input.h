@@ -19,6 +19,8 @@ typedef void (*app_input_present_t)(app_ctx_t *ctx, const app_desc_t *app,
 /// 重建采样帧的坐标、触点数和按下状态；不回放多点载荷或原始寄存器。
 /// Rebuild frame coordinates, contact count and contact state without replaying multipoint payloads or raw registers.
 void app_input_frame_to_touch(const touch_frame_t *frame, app_touch_t *touch);
+/// 摄取前转换所有屏内触点，保留屏外实体键及诊断原始字节。/ Rotate all on-panel contacts before ingestion, preserving cover keys and raw diagnostics.
+void app_input_rotate_touch(app_touch_t *touch);
 /// 先判边沿、记诊断，再去抖并更新 ctx；was_touched 仍由调用方在原分发位置提交。
 /// Detect edges and record diagnostics before debounce/context updates; caller still commits was_touched at its existing dispatch point.
 /// frame_ms 使用原采样或直读时间，last_input_ms 只在成功读取的接触或释放帧更新。

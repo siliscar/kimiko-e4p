@@ -193,6 +193,7 @@
 #include "reader_session.h"
 #include "reader_turn.h"
 #include "reader_reflow.h"
+#include "reader_orientation.h"
 #include "reader_open.h"
 #include "reader_session_layout.h"
 #include "reader_chapter.h"
@@ -402,6 +403,11 @@ static struct {
 static bool s_indent_feedback_pending;
 static void reader_indent_hold_cancel(void);
 static bool s_reader_fullscreen;
+static reader_orientation_t s_orientation;
+static int64_t s_orientation_retry_ms;
+static bool reader_orientation_apply(display_orientation_t orientation);
+static bool reader_orientation_sync(void);
+static bool reader_orientation_portrait(void);
 static bool s_shelf_key_mode,s_shelf_key_paint_pending;
 static int s_shelf_key_pressed,s_shelf_key_delta;
 static int64_t s_shelf_key_until;
@@ -615,7 +621,10 @@ static void lock_draw(void) {
 }
 static void unlock_draw(void) { reader_prefetch_unlock(); }
 static size_t fb_bytes(void) { return (size_t)epd_width() * epd_height() / 2; }
-#define READER_FULLSCREEN_PROGRESS_TOP (UI_LOCK_HEIGHT - 12)
+#define READER_WIDTH epd_rotated_display_width()
+#define READER_HEIGHT epd_rotated_display_height()
+#define READER_BAR_TOP (READER_HEIGHT - UI_BAR_MARGIN - UI_BAR_H)
+#define READER_FULLSCREEN_PROGRESS_TOP (READER_HEIGHT - 12)
 #define READER_FOOTER_PROGRESS_SPACE 19
 // 隐藏时回收条形预留，文字仍在原位，正文与文字间保留8px。
 // Reclaim the hidden bar's reservation while keeping footer text in place with an 8px body gap.
@@ -631,18 +640,18 @@ static EpdRect reader_area(void) {
     // 全屏进度线单独差分，翻页时不让正文刷新反复驱动整条横线。
     // Keep the full-screen progress strip out of body updates so turns do not drive the whole bar.
     const int bottom = s_reader_fullscreen
-        ? (s_reader_progress_bar ? READER_FULLSCREEN_PROGRESS_TOP : UI_LOCK_HEIGHT)
-        : UI_BAR_TOP + UI_BAR_H - reader_footer_height();
-    return (EpdRect){0, top, UI_LOCK_WIDTH, bottom - top};
+        ? (s_reader_progress_bar ? READER_FULLSCREEN_PROGRESS_TOP : READER_HEIGHT)
+        : READER_BAR_TOP + UI_BAR_H - reader_footer_height();
+    return (EpdRect){0, top, READER_WIDTH, bottom - top};
 }
 static EpdRect reader_fullscreen_progress_area(void) {
-    const int top = s_reader_progress_bar ? READER_FULLSCREEN_PROGRESS_TOP : UI_LOCK_HEIGHT;
-    return (EpdRect){0, top, UI_LOCK_WIDTH, UI_LOCK_HEIGHT - top};
+    const int top = s_reader_progress_bar ? READER_FULLSCREEN_PROGRESS_TOP : READER_HEIGHT;
+    return (EpdRect){0, top, READER_WIDTH, READER_HEIGHT - top};
 }
 // 工具栏覆盖底部 120px；默认高度的页脚进度条（1143–1149）和章节行都在这条带内。
 // The tools bar covers the bottom 120 px; the default footer bar (1143–1149) and title row sit inside it.
 static EpdRect reader_tools_area(void) {
-    return (EpdRect){0, UI_BAR_TOP, UI_LOCK_WIDTH, UI_LOCK_HEIGHT - UI_BAR_TOP};
+    return (EpdRect){0, READER_BAR_TOP, READER_WIDTH, READER_HEIGHT - READER_BAR_TOP};
 }
 static EpdRect body_rect_for_tracking(int tracking_index) {
     (void)tracking_index;
@@ -651,15 +660,15 @@ static EpdRect body_rect_for_tracking(int tracking_index) {
         : (app_settings_reader_statusbar() ? 96 : 16) + s_chrome_height[0];
     // 正文底与页脚差分带相接。/ Body bottom meets the footer refresh band.
     int bottom = s_reader_fullscreen
-        ? (s_reader_progress_bar ? READER_FULLSCREEN_PROGRESS_TOP : UI_LOCK_HEIGHT) - 2
-        : UI_BAR_TOP + UI_BAR_H - reader_footer_height();
+        ? (s_reader_progress_bar ? READER_FULLSCREEN_PROGRESS_TOP : READER_HEIGHT) - 2
+        : READER_BAR_TOP + UI_BAR_H - reader_footer_height();
     // 四向留白是屏幕边距，横排竖排同一套：左右缩栏宽，上下缩页高。
     // 不吸附整字格，完整行把余量摊到字间。
     // The four insets are screen-side margins shared by both writing modes: left/right narrow the
     // column, top/bottom shorten the page. They never snap to glyph cells; full lines spread the
     // remainder into the tracking.
     return (EpdRect){s_margin[MARGIN_LEFT], top + s_margin[MARGIN_TOP],
-                     UI_LOCK_WIDTH - s_margin[MARGIN_LEFT] - s_margin[MARGIN_RIGHT],
+                     READER_WIDTH - s_margin[MARGIN_LEFT] - s_margin[MARGIN_RIGHT],
                      bottom - top - s_margin[MARGIN_TOP] - s_margin[MARGIN_BOTTOM]};
 }
 static EpdRect body_rect(void) {
@@ -682,7 +691,7 @@ static EpdRect progress_rect(void) {
     // 固定底边与左右边距，增高时向正文方向扩展；进度条和文字随上沿移动。
     // Keep the bottom and side insets fixed; growth expands toward the body, moving the bar and text with its top.
     const int height = reader_footer_height();
-    return (EpdRect){36, UI_BAR_TOP + UI_BAR_H - height, UI_LOCK_WIDTH - 72, height};
+    return (EpdRect){36, READER_BAR_TOP + UI_BAR_H - height, READER_WIDTH - 72, height};
 }
 static int shelf_rows(void) { return s_view == SHELF && app_settings_shelf_style() == 5 ? 4 : BOOK_GRID_ROWS; }
 #define SHELF_BOOK_LIFT_PX 16
@@ -1096,9 +1105,9 @@ static void draw_shelf_furniture(uint8_t* fb) {
     }
 }
 static EpdRect tool_rect(int i) {
-    int x0 = i * UI_LOCK_WIDTH / BOOK_TOOL_COUNT;
-    int x1 = (i + 1) * UI_LOCK_WIDTH / BOOK_TOOL_COUNT;
-    return (EpdRect){x0, 1096, x1 - x0, 120};
+    int x0 = i * READER_WIDTH / BOOK_TOOL_COUNT;
+    int x1 = (i + 1) * READER_WIDTH / BOOK_TOOL_COUNT;
+    return (EpdRect){x0, READER_BAR_TOP, x1 - x0, 120};
 }
 static int leaves(void) {
     if (s_view == TOC) return book_toc_pages(book_navigation_count());
@@ -1736,6 +1745,11 @@ static void invalidate_prep(void) { reader_prefetch_invalidate(); }
 // The directory uses the system face; join painting before switching and restore the reader face on return.
 static void set_reader_view(book_view_t view) {
     reader_indent_hold_cancel();
+    if (view != READING) {
+        const bool had_text = s_text != NULL;
+        (void)reader_orientation_portrait();
+        if (had_text && !s_text) view = SHELF;
+    }
     lock_draw();
     invalidate_prep();
     if (view == READING) app_font_activate_reading();
@@ -1745,6 +1759,7 @@ static void set_reader_view(book_view_t view) {
     // Drop an unexpired middle click when leaving the body so it never replays on return.
     if (view != READING) middle_pending_clear();
     unlock_draw();
+    if (view == READING) (void)reader_orientation_sync();
 }
 
 /* ---- 阅读工具层 / Reader overlays ---- */
@@ -3322,15 +3337,15 @@ static void draw_reader_panel(uint8_t* fb) {
         ui_fill_rect_fast(band, UI_GRAY_WHITE, fb);
         // 1px 浅灰线在白底工具栏上几乎看不见；结构分隔改用深色双像素。
         // A 1 px light-gray rule reads as almost nothing on the white bar; use the dark two-pixel separator.
-        ui_draw_separator(fb, band.y, 0, UI_LOCK_WIDTH, 0x70);
+        ui_draw_separator(fb, band.y, 0, READER_WIDTH, 0x70);
         const char* labels[] = {"目录", "书签", "阅读统计", "阅读设置", "字体设置",
                                 s_reader_fullscreen ? "退出全屏" : "全屏"};
         for (int i = 0; i < BOOK_TOOL_COUNT; ++i) {
             EpdRect rect = tool_rect(i);
             int cx = rect.x + rect.width / 2;
             bool bookmarked = i == 1 && bookmark_is_current();
-            draw_reader_tool_icon(fb, cx, 1138, i, bookmarked);
-            ui_text_box(fb,(EpdRect){rect.x+6,1159,rect.width-12,40},20,bookmarked?"已书签":labels[i],EPD_DRAW_ALIGN_CENTER,false);
+            draw_reader_tool_icon(fb, cx, rect.y + 42, i, bookmarked);
+            ui_text_box(fb,(EpdRect){rect.x+6,rect.y+63,rect.width-12,40},20,bookmarked?"已书签":labels[i],EPD_DRAW_ALIGN_CENTER,false);
         }
     } else if (s_reader_panel == READER_PANEL_FONT_SETTINGS) draw_font_settings(fb);
     else if (s_reader_panel == READER_PANEL_WEIGHT_SETTINGS) draw_weight_settings(fb);
@@ -3428,7 +3443,7 @@ static void draw_reader_header(uint8_t *fb) {
     reader_chrome_data_t data;
     reader_chrome_data(&data);
     reader_chrome_draw_header(fb, &data, top + s_chrome_height[0] / 2 + 1);
-    ui_hairline(fb, top + s_chrome_height[0] - 2, 36, 612, UI_GRAY_LIGHT);
+    ui_hairline(fb, top + s_chrome_height[0] - 2, 36, READER_WIDTH - 72, UI_GRAY_LIGHT);
 }
 // 竖排章节题头：右列是编号（第三章），左列是章名，读序依旧自右向左；两列整体留出列宽，
 // 排版用同一个宽度在首页右边缘预留，绘制与预留因此不会错位。
@@ -3644,11 +3659,11 @@ static void draw_reader_outer(uint8_t *fb,size_t page) {
                                     s_chapter_heading_label, s_chapter_heading_title);
         }
     }
-    ui_reader_background_paint(fb, (EpdRect){0,0,UI_LOCK_WIDTH,UI_LOCK_HEIGHT}, true);
+    ui_reader_background_paint(fb, (EpdRect){0,0,READER_WIDTH,READER_HEIGHT}, true);
     draw_reader_images(fb, page, body);
     if (s_reader_fullscreen) {
         // Full-book progress uses the last few screen rows and no footer text.
-        EpdRect track = {36, READER_FULLSCREEN_PROGRESS_TOP + 3, UI_LOCK_WIDTH - 72, 3};
+        EpdRect track = {36, READER_FULLSCREEN_PROGRESS_TOP + 3, READER_WIDTH - 72, 3};
         if (s_reader_progress_bar) {
             ui_fill_round_rect(fb, track, 1, 0x90);
             track.width = track.width * (int)percent(page) / 100;
@@ -3673,9 +3688,9 @@ static void draw_reader_outer(uint8_t *fb,size_t page) {
         reader_chrome_draw_footer_row(fb, &data, text_top, 28, track.x, track.x + track.width);
     }
     if (s_reader_notice[0]) {
-        EpdRect notice = {218, 160, 248, 48};
+        EpdRect notice = {READER_WIDTH / 2 - 124, 160, 248, 48};
         ui_fill_round_rect(fb, notice, 24, 0xd0);
-        ui_text_vc(fb, 342, 184, 19, s_reader_notice, EPD_DRAW_ALIGN_CENTER, false);
+        ui_text_vc(fb, READER_WIDTH / 2, 184, 19, s_reader_notice, EPD_DRAW_ALIGN_CENTER, false);
     }
     draw_reader_panel(fb);
 }
@@ -3852,8 +3867,8 @@ static EpdRect reader_status_area(void) {
     // 状态栏和页眉合并到正文上沿，全屏只保留状态栏。
     // Merge status and header up to the body's top; full screen retains status alone.
     if (!s_reader_fullscreen)
-        return (EpdRect){0, 0, UI_LOCK_WIDTH, (app_settings_reader_statusbar() ? 80 : 0) + s_chrome_height[0]};
-    return (EpdRect){0, 0, UI_LOCK_WIDTH, 80};
+        return (EpdRect){0, 0, READER_WIDTH, (app_settings_reader_statusbar() ? 80 : 0) + s_chrome_height[0]};
+    return (EpdRect){0, 0, READER_WIDTH, 80};
 }
 static bool reader_status_visible(void) {
     // 窗口化页眉常驻时钟，全屏只有状态栏开档才有时间显示。
@@ -3932,6 +3947,8 @@ static void reader_memory_snapshot(const char *event) {
 #endif
 
 static bool present(app_ctx_t* ctx, app_redraw_t redraw) {
+    if (redraw != APP_REDRAW_NONE && redraw != APP_REDRAW_DONE && reader_orientation_sync())
+        redraw = APP_REDRAW_FULL;
     // 开关标记只对本次推屏有效：提前返回也不留给下一帧。
     // The toggle flag applies to this present only; consume it even on an early return.
     const bool tools_toggle = s_reader_tools_toggle;
@@ -3999,7 +4016,7 @@ static bool present(app_ctx_t* ctx, app_redraw_t redraw) {
         .mode = s_mode, .page_mode = APP_PAGE_REFRESH_MODE,
         .area = s_area, .body_area = reader_area(), .status_area = reader_status_area(), .footer_area = progress_rect(),
         .progress_area = reader_fullscreen_progress_area(), .tools_area = reader_tools_area(),
-        .screen_area = {0, 0, UI_LOCK_WIDTH, UI_LOCK_HEIGHT},
+        .screen_area = {0, 0, READER_WIDTH, READER_HEIGHT},
         .water_dir = s_water_turn_dir,
         .reading = s_view == READING, .reader_body = s_view == READING && s_text,
         .prior_reader = s_presented_view == (int)READING,
@@ -4063,7 +4080,7 @@ static bool present(app_ctx_t* ctx, app_redraw_t redraw) {
         s_reader_panel == READER_PANEL_NONE && !s_toolbar && !s_clear_confirm &&
         book_layout_page_image_count(s_reader_session.position.page) == 0;
     reader_excerpt_presented(reader_frame_ok && reader_image_slots(s_reader_session.position.page) == 0 &&
-        !s_reader_notice[0] && !s_dictionary_notice_until, !tools_band &&
+        !s_reader_notice[0], !tools_band &&
         (redraw == APP_REDRAW_PAGE || redraw == APP_REDRAW_FULL ||
          (s_area.x <= output_request.body_area.x && s_area.y <= output_request.body_area.y &&
           s_area.x + s_area.width >= output_request.body_area.x + output_request.body_area.width &&
@@ -4208,6 +4225,10 @@ static void free_book(void) {
     s_selected_toc = SIZE_MAX;
     s_jump_offset = SIZE_MAX;
     reader_session_close(&s_reader_session);
+    display_orientation_set(DISPLAY_ORIENTATION_PORTRAIT);
+    s_orientation = (reader_orientation_t){0};
+    s_orientation_retry_ms = 0;
+    book_layout_set_image_bleed_width(app_settings_book_background_path()[0] ? 0 : UI_LOCK_WIDTH);
     app_font_activate_system();
 #if CONFIG_READER_PERF && CONFIG_READER_MEMORY
     reader_memory_snapshot("book_closed");
@@ -5355,6 +5376,87 @@ static const reader_reflow_t *reader_reflow_context(void) {
         .refresh_lead = refresh_chapter_lead, .build = reader_reflow_build, .save = save_progress,
     };
     return &reflow;
+}
+
+// 方向与布局一起提交：先交还预绘，按同一文字偏移重建；失败回滚，双失败沿用关书回退。
+// Commit orientation with layout: join prefetch, rebuild around the same text offset, roll back failures and close on a double failure.
+static bool reader_orientation_apply(display_orientation_t next) {
+    const display_orientation_t previous = display_orientation_get();
+    if (previous == next) return false;
+    size_t offset = s_text ? reader_page_offset(s_reader_session.position.page) : 0;
+    lock_draw();
+    invalidate_prep();
+    display_orientation_set(next);
+    book_layout_set_image_bleed_width(app_settings_book_background_path()[0] ? 0 : READER_WIDTH);
+    bool ok = true, restored = true;
+    if (s_text) {
+        refresh_chapter_lead();
+        ok = reader_reflow_build();
+        if (!ok) {
+            display_orientation_set(previous);
+            book_layout_set_image_bleed_width(app_settings_book_background_path()[0] ? 0 : READER_WIDTH);
+            refresh_chapter_lead();
+            restored = reader_reflow_build();
+        }
+        if (ok || restored) {
+            s_reader_session.position.page = book_layout_page_for_offset(offset);
+            s_jump_offset = offset;
+            s_jump_page = s_reader_session.position.page;
+        }
+    }
+    unlock_draw();
+    if (!restored) { free_book(); s_view = SHELF; }
+    else {
+        release_page_images();
+        if (ok && s_text) { prepare_inline_image(); save_progress(); }
+    }
+    s_reader_chrome_fp_valid = false;
+    s_reader_footer_pending = s_reader_image_refresh_pending = false;
+    s_reader_footer_strong = s_water_turn_pending = s_reader_turn_pending = false;
+    s_shake_gate = (book_shake_gate_t){0};
+    if (!ok) s_orientation_retry_ms = esp_timer_get_time() / 1000 + 2000;
+    return ok || !restored;
+}
+
+static bool reader_orientation_portrait(void) {
+    bool changed = reader_orientation_apply(DISPLAY_ORIENTATION_PORTRAIT);
+    // 系统几何必须是竖屏；若竖屏重排无法恢复，按既有关书路径清理。
+    // System geometry must be portrait; close through the existing cleanup if portrait reflow cannot be restored.
+    if (display_orientation_get() != DISPLAY_ORIENTATION_PORTRAIT) {
+        save_progress(); free_book(); s_view = SHELF;
+        return true;
+    }
+    return changed;
+}
+static bool reader_orientation_sync(void) {
+    if (s_view != READING || (s_reader_panel != READER_PANEL_NONE && s_reader_panel != READER_PANEL_TOOLS))
+        return reader_orientation_portrait();
+    const display_orientation_t next = s_orientation.locked;
+    bool changed = reader_orientation_apply(next);
+    if (display_orientation_get() != next)
+        s_orientation.locked = display_orientation_get();
+    return changed;
+}
+static bool rotation_available(app_ctx_t *ctx) {
+    return ctx->acc && s_view == READING && s_text && !s_clear_confirm &&
+        (s_reader_panel == READER_PANEL_NONE || s_reader_panel == READER_PANEL_TOOLS);
+}
+static bool rotation_enabled(app_ctx_t *ctx) { (void)ctx; return s_orientation.automatic; }
+static void on_rotation_toggle(app_ctx_t *ctx) {
+    if (!rotation_available(ctx)) return;
+    s_orientation.automatic = !s_orientation.automatic;
+    s_orientation.locked = display_orientation_get();
+    reader_orientation_cancel(&s_orientation);
+    s_shake_gate = (book_shake_gate_t){0};
+}
+static bool on_system_overlay(app_ctx_t *ctx) {
+    reader_orientation_cancel(&s_orientation);
+    bool changed = reader_orientation_portrait();
+    if (changed) {
+        if (s_text) (void)ui_reader_background_prepare(app_settings_book_background_path());
+        render(ctx, ctx->fb);
+    }
+    return changed;
 }
 
 static app_redraw_t apply_reader_layout(app_ctx_t* ctx, int next_px,
@@ -6951,7 +7053,7 @@ static app_redraw_t paint_control(app_ctx_t* ctx, EpdRect rect) {
 static bool reader_tools_swipe(app_ctx_t *ctx, const ui_gesture_event_t *ev) {
     if (s_view != READING || !s_text || s_reader_panel != READER_PANEL_NONE ||
         s_clear_confirm || s_scan_pending || ctx->consumed || ev->type != UI_GESTURE_SWIPE_U ||
-        ev->x0 >= UI_LOCK_WIDTH || ev->y0 < UI_LOCK_HEIGHT - 120 || ev->y0 >= UI_LOCK_HEIGHT) return false;
+        ev->x0 >= READER_WIDTH || ev->y0 < READER_HEIGHT - 120 || ev->y0 >= READER_HEIGHT) return false;
     s_pressed_control = s_reader_slider = -1;
     s_reader_panel = READER_PANEL_TOOLS;
     s_reader_tools_toggle = true;
@@ -7274,7 +7376,7 @@ static app_redraw_t gesture_event(app_ctx_t* ctx, const ui_gesture_event_t* ev) 
             return action_at(ctx, ev->x0, ev->y0);
     }
     if (!s_clear_confirm && !s_scan_pending) {
-        if (s_view == READING && (!s_toolbar || (s_reader_panel == READER_PANEL_TOOLS && ev->y0 < 1096)) &&
+        if (s_view == READING && (!s_toolbar || (s_reader_panel == READER_PANEL_TOOLS && ev->y0 < READER_BAR_TOP)) &&
             ui_rect_hit(body_rect(), ev->x0, ev->y0)) {
             int direction = reader_swipe_direction(ev->type, app_settings_reader_vertical_turn());
             if (direction) { ctx->user_activity = true; return turn_page(ctx, direction); }
@@ -7564,18 +7666,25 @@ static app_redraw_t reader_up_key_tick(app_ctx_t* ctx) {
     s_stats_activity_ms = ctx->now_ms;
     return reader_key_action(ctx, action);
 }
-// 屏轴映射：面板固定倒置竖屏，整机 X（board_accel_to_device 已转换）为屏幕短边横轴，
+// 屏轴映射：基准为倒置竖屏，整机 X（board_accel_to_device 已转换）为屏幕短边横轴，
 // Y 为长边、Z 出屏。sx 符号已按真机校准（2026-10-31）：整机 x 与屏幕右向相反，取负号，
 // 右晃为下一页；若换装或面板方向变更需重新校准。
-// Screen-axis mapping: the panel is fixed inverted portrait; device X (already converted by
+// Screen-axis mapping: the baseline is inverted portrait; device X (already converted by
 // board_accel_to_device) is the screen's short-edge horizontal axis, Y the long edge and Z out
 // of the screen. The sx sign is device-calibrated (2026-10-31): device x opposes the screen's
 // rightward direction, so it is negated to make a right shake turn forward. Recalibrate if the
-// board or panel orientation ever changes.
+// board mounting changes. Reading rotation then remaps both screen axes.
 static void reader_shake_screen_axes(const sc7a20h_sample_t* sample, int* sx, int* sy, int* sz) {
     *sx = -sample->x_mg;
     *sy = sample->y_mg;
     *sz = sample->z_mg;
+    const int x = *sx, y = *sy;
+    switch (display_orientation_get()) {
+        case DISPLAY_ORIENTATION_RIGHT: *sx = y; *sy = -x; break;
+        case DISPLAY_ORIENTATION_INVERTED: *sx = -x; *sy = -y; break;
+        case DISPLAY_ORIENTATION_LEFT: *sx = -y; *sy = x; break;
+        default: break;
+    }
 }
 // 晃动翻页：阅读正文横晃一次翻一页，判定在 book_policy.h；触摸 600ms 内与回弹由门槛屏蔽。
 // 传感器只在正文可见时上电（25Hz HR 约 10µA），离页、锁屏与重排窗口自动断电；浅睡会被
@@ -7600,9 +7709,10 @@ static const sc7a20h_sensor_config_t READER_SHAKE_SENSOR_CONFIG = {
 static app_redraw_t reader_shake_tick(app_ctx_t* ctx) {
     static int64_t s_poll_ms, s_cfg_fail_ms, s_sleep_retry_ms;
     if (ctx->touch && ctx->touch->touched) s_shake_touch_ms = ctx->now_ms;
-    const bool active = app_settings_reader_shake_turn() &&
+    const bool active = (app_settings_reader_shake_turn() || s_orientation.automatic) &&
                         app_book_reader_body_visible() && ctx->acc != NULL;
     if (!active) {
+        reader_orientation_cancel(&s_orientation);
         if (s_shake_sensor_on && ctx->acc && ctx->now_ms >= s_sleep_retry_ms) {
             board_sensor_sleep(ctx->acc);
             s_shake_sensor_on = sc7a20h_powered(ctx->acc);
@@ -7627,7 +7737,28 @@ static app_redraw_t reader_shake_tick(app_ctx_t* ctx) {
         s_shake_sensor_on = true;
     }
     sc7a20h_sample_t sample;
-    if (board_accel_read(ctx->acc, &sample) != ESP_OK) return APP_REDRAW_NONE;
+    if (board_accel_read(ctx->acc, &sample) != ESP_OK) {
+        reader_orientation_cancel(&s_orientation);
+        return APP_REDRAW_NONE;
+    }
+    display_orientation_t next;
+    if (s_orientation.automatic && ctx->now_ms >= s_orientation_retry_ms &&
+        reader_orientation_feed(&s_orientation, sample.x_mg, sample.y_mg, sample.z_mg,
+            ctx->now_ms - s_shake_touch_ms < READER_SHAKE_TOUCH_QUIET_MS,
+            ctx->now_ms, &next)) {
+        s_shake_gate = (book_shake_gate_t){0};
+        if (reader_orientation_apply(next)) {
+            s_orientation.locked = s_text ? next : DISPLAY_ORIENTATION_PORTRAIT;
+            s_stats_activity_ms = ctx->now_ms;
+            return APP_REDRAW_FULL;
+        }
+        return APP_REDRAW_NONE;
+    }
+    // 候选换向期间不把转动解释为晃动翻页。/ Never interpret an in-progress orientation change as a shake turn.
+    if (!app_settings_reader_shake_turn() || s_orientation.candidate) {
+        s_shake_gate = (book_shake_gate_t){0};
+        return APP_REDRAW_NONE;
+    }
     int sx, sy, sz;
     reader_shake_screen_axes(&sample, &sx, &sy, &sz);
     int dir = book_shake_feed(&s_shake_gate, sx, sy, sz,
@@ -7781,6 +7912,8 @@ static void before_lock(app_ctx_t* ctx) {
     flush_ticket_stats();
     (void)app_reading_journal_flush();
     s_stats_last_ms = 0;
+    reader_orientation_cancel(&s_orientation);
+    on_system_overlay(ctx);
 }
 static display_rect_t area_hint(app_ctx_t* ctx) { (void)ctx; return display_rect_from_epd(s_area); }
 static bool main_page_visible(app_ctx_t* ctx) {
@@ -7816,6 +7949,8 @@ const app_desc_t app_book = {
     .menu_handle_enabled = menu_handle_enabled,
     .main_page_visible = main_page_visible,
     .normalize_hold_gray = normalize_hold_gray,
+    .rotation_available = rotation_available, .rotation_enabled = rotation_enabled,
+    .on_rotation_toggle = on_rotation_toggle, .on_system_overlay = on_system_overlay,
     .render = render, .present = present, .on_enter = on_enter, .on_exit = book_on_exit,
     .on_media_lost = book_on_media_lost, .on_media_ready = book_on_media_ready,
     .on_before_lock = before_lock, .on_main_key = shelf_main_key,

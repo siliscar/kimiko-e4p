@@ -123,6 +123,13 @@ struct app_desc_s {
     /// Optional: protect current reading-background grays during normalization, based on the visible frame.
     /// Whole-screen quick-layer close normalization and reader presentation share this property.
     bool (*normalize_hold_gray)(app_ctx_t* ctx);
+    /// 可选：当前阅读画面能否使用方向控制、自动状态及切换动作。/ Optional: reader orientation availability, automatic state and toggle.
+    bool (*rotation_available)(app_ctx_t* ctx);
+    bool (*rotation_enabled)(app_ctx_t* ctx);
+    void (*on_rotation_toggle)(app_ctx_t* ctx);
+    /// 系统菜单/电源弹层绘制前准备竖屏底页；返回 true 时底页已改变，需要整页推屏。
+    /// Prepare a portrait underlay before system menu/power overlays; true means the underlay changed and needs a whole-page push.
+    bool (*on_system_overlay)(app_ctx_t* ctx);
     /// 进页/离页。on_enter 里做上电、唤醒传感器、拉一次数据这类副作用。
     /// / Enter/exit. on_enter powers up, wakes sensors, takes a first sample.
     void (*on_enter)(app_ctx_t* ctx);

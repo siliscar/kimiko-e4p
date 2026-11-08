@@ -225,3 +225,5 @@ int main(void) {
         CONFIG_TOUCH_DIAG, trace, callbacks, presents, public_presents);
     return 0;
 }
+
+void display_orientation_touch(uint16_t *x, uint16_t *y) { (void)x; (void)y; }

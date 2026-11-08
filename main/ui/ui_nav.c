@@ -219,6 +219,7 @@ void ui_nav_battery_draw(uint8_t *fb, int x, int cy) {
     }
 }
 void ui_nav_status(uint8_t *fb) {
+    const int width = epd_rotated_display_width();
     status_prepare_metrics();
     const pmu_snapshot_t *pmu = device_power_get();
     char clock[12]; clock_text(clock,sizeof(clock));
@@ -235,31 +236,31 @@ void ui_nav_status(uint8_t *fb) {
     if (gauge_percent >= 0) snprintf(percent, sizeof(percent), "%u%%", (unsigned)gauge_percent);
     // 按实际百分比宽度排列网络图标，留 10 像素间隔；墨色与电池相同。
     // Place the network marks 10 px before the measured percentage, using the battery ink.
-    const int percent_left = 595 - status_number_width(percent);
+    const int percent_left = width - 89 - status_number_width(percent);
     const int network_right = percent_left - 10;
     const int wifi_center = network_right - UI_NAV_NETWORK_ICON_PX / 2;
     const int bluetooth_center = wifi_center - (wifi_visible ? UI_NAV_NETWORK_ICON_PX + 8 : 0);
     int signature_width = 280;
     const int clock_right = 36 + status_number_width(clock);
-    int available = 2 * (UI_LOCK_WIDTH / 2 - clock_right - 12);
+    int available = 2 * (width / 2 - clock_right - 12);
     if (available < signature_width) signature_width = available > 0 ? available : 0;
     int group_left = percent_left;
     if (wifi_visible || bluetooth_visible) {
         group_left = (bluetooth_visible ? bluetooth_center : wifi_center) - UI_NAV_NETWORK_ICON_PX / 2;
     }
-    available = 2 * (group_left - 12 - UI_LOCK_WIDTH / 2);
+    available = 2 * (group_left - 12 - width / 2);
     if (available < signature_width) signature_width = available > 0 ? available : 0;
     char signature[96];
     snprintf(signature, sizeof(signature), "%s", app_settings_status_signature());
     status_fit_signature(signature, signature_width);
-    if (signature[0]) ui_text_fixed_vc(fb, UI_LOCK_WIDTH / 2, status_center_y, UI_STATUS_SIGNATURE_PX,
+    if (signature[0]) ui_text_fixed_vc(fb, width / 2, status_center_y, UI_STATUS_SIGNATURE_PX,
                                       signature, EPD_DRAW_ALIGN_CENTER, false);
     if (wifi_visible) ui_nav_wifi_icon(fb, wifi_center, status_center_y, UI_NAV_NETWORK_ICON_PX, UI_GRAY_BLACK);
     if (bluetooth_visible)
         ui_draw_icon(fb, bluetooth_center, status_center_y, UI_NAV_NETWORK_ICON_PX,
                      UI_ICON_BLUETOOTH, UI_GRAY_BLACK);
-    ui_nav_battery_draw(fb, 606, status_center_y);
-    ui_text_fixed_vc(fb, 595, status_center_y, UI_STATUS_PERCENT_PX, percent, EPD_DRAW_ALIGN_RIGHT, false);
+    ui_nav_battery_draw(fb, width - 78, status_center_y);
+    ui_text_fixed_vc(fb, width - 89, status_center_y, UI_STATUS_PERCENT_PX, percent, EPD_DRAW_ALIGN_RIGHT, false);
     s_status_power = status_power();
 }
 

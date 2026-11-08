@@ -7,6 +7,7 @@
  */
 #include "app_input.h"
 #include "touch_diag.h"
+#include "display_orientation.h"
 #include <string.h>
 
 #if CONFIG_TOUCH_DIAG
@@ -60,6 +61,14 @@ void app_input_frame_to_touch(const touch_frame_t* f, app_touch_t* t) {
     t->count = f->count;
     t->x = f->x;
     t->y = f->y;
+}
+
+void app_input_rotate_touch(app_touch_t *touch) {
+    if (!touch->touched) return;
+    display_orientation_touch(&touch->x, &touch->y);
+    for (unsigned i = 0; i < APP_TOUCH_MAX_POINTS; ++i)
+        if (touch->points[i].active)
+            display_orientation_touch(&touch->points[i].x, &touch->points[i].y);
 }
 
 void app_input_ingest_touch_frame(app_ctx_t* ctx, app_touch_t* latest,

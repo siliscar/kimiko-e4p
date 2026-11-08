@@ -75,6 +75,10 @@ header=(root/'main/ui/ui_quick_menu.h').read_text()
 code+='\n'.join(re.findall(r'^#define UI_QUICK[^\n]*',header,re.M))+'\n'
 code+=re.search(r'typedef enum \{\s*UI_QUICK_CTL_NONE.*?\} ui_quick_control_t;',header,re.S).group(0)+'\n'
 code+=re.search(r'typedef struct \{.*?\} ui_quick_menu_t;',header,re.S).group(0)+'\n'
+for name in ('ui_quick_menu_button_count', 'ui_quick_menu_landscape', 'ui_quick_menu_button_x',
+             'ui_quick_menu_row_offset', 'ui_quick_menu_button_y', 'ui_quick_menu_height',
+             'ui_quick_menu_frontlight_track', 'ui_quick_menu_frontlight_hit'):
+    code+=function('main/ui/ui_quick_menu.h',name)
 code+='static void epd_draw_vline(int x,int y,int n,uint8_t c,uint8_t *fb){for(int i=0;i<n;++i)epd_draw_pixel(x,y+i,c,fb);}'
 code+=function('components/epdiy/src/epdiy.c','epd_fill_circle_helper')
 code+=function('main/ui/ui_kit.h','ui_control_gray')
@@ -85,10 +89,13 @@ for name in ('ui_read_pixel','ui_image_bw_rect','icon_nibble','ui_draw_icon','ui
 code+=body('main/ui/ui_quick_menu.c')+body('main/ui/ui_click_feedback.c')
 code+=r'''
 static uint8_t pixel(uint8_t *fb,int x,int y){return ui_read_pixel(fb,x,y)*17u;}
-static bool icon_edge(int x,int y){
- for(int i=0;i<4;++i)if(abs(x-center_x(i))<=22&&abs(y-UI_QUICK_CIRCLE_Y)<=22)return true;
- return abs(x-UI_QUICK_FL_ICON_CX)<=UI_QUICK_FL_ICON_SIZE/2&&
-  (abs(y-UI_QUICK_FL_BRI_CY)<=UI_QUICK_FL_ICON_SIZE/2||abs(y-UI_QUICK_FL_CCT_CY)<=UI_QUICK_FL_ICON_SIZE/2);
+static bool icon_edge(const ui_quick_menu_t *menu,int x,int y){
+ for(int i=0;i<ui_quick_menu_button_count(menu);++i)if(abs(x-center_x(menu,i))<=(i==4?30:22)&&abs(y-ui_quick_menu_button_y(menu,i))<=(i==4?30:22))return true;
+ for(int control=UI_QUICK_CTL_BRIGHTNESS;control<=UI_QUICK_CTL_CCT;++control){
+  EpdRect track=ui_quick_menu_frontlight_track(menu,(ui_quick_control_t)control);
+  if(abs(x-(track.x+48))<=UI_QUICK_FL_ICON_SIZE/2&&abs(y-(track.y+track.height/2))<=UI_QUICK_FL_ICON_SIZE/2)return true;
+ }
+ return false;
 }
 static void patterned(void){for(size_t i=0;i<BYTES;++i)frame[i]=(uint8_t)(i*13u+7u);memcpy(saved,frame,BYTES);}
 int main(void){
@@ -97,26 +104,51 @@ int main(void){
    // 三种层状态：无前光、开灯展开卡片、有前光但熄灯收起。
    // Three layer states: no frontlight, card expanded while on, collapsed while off.
    for(int fl=0;fl<3;++fl){
-    ui_quick_menu_t menu={0};menu.frontlight=fl!=0;menu.fl_on=fl==1;menu.fl_bri=60;menu.fl_cct=30;
-    const int layer_height=fl==1?UI_QUICK_FRONTLIGHT_HEIGHT:UI_QUICK_HEIGHT;
+    ui_quick_menu_t menu={.rotation_available=policy>0,.rotation_enabled=policy==2};menu.frontlight=fl!=0;menu.fl_on=fl==1;menu.fl_bri=60;menu.fl_cct=30;
+    const int layer_height=ui_quick_menu_height(&menu);
+    assert(layer_height<=epd_rotated_display_height());
+    if(ui_quick_menu_landscape())assert(layer_height==(policy>0||fl==1?404:264));
     patterned();int before=allocs;ui_quick_menu_draw(frame,&menu,true,false);
     assert(allocs==before&&!live);int grays=0;
     for(int y=0;y<epd_rotated_display_height();++y)for(int x=0;x<epd_rotated_display_width();++x){
      bool mask=y<layer_height&&layer_pixel(x,y,epd_rotated_display_width(),layer_height);
      uint8_t p=pixel(frame,x,y);
      if(!mask)assert(p==pixel(saved,x,y));
-     else {if(!icon_edge(x,y))assert(p==0||p==153||p==255);grays+=p==153;}
+     else {if(!icon_edge(&menu,x,y))assert(p==0||p==153||p==255);grays+=p==153;}
     }
     assert(grays>1000);
     assert(ui_quick_menu_rect(&menu).height==layer_height);
     memcpy(again,frame,BYTES);memset(frame,0x33,BYTES);ui_quick_menu_draw(frame,&menu,true,false);
     for(int y=0;y<layer_height;++y)for(int x=0;x<epd_rotated_display_width();++x)
      if(layer_pixel(x,y,epd_rotated_display_width(),layer_height))assert(pixel(frame,x,y)==pixel(again,x,y));
+    for(int key=0;key<ui_quick_menu_button_count(&menu);++key){
+     memcpy(again,frame,BYTES);EpdRect dirty;
+     assert(ui_quick_menu_draw_button(frame,&menu,key,false,true,&dirty));
+     assert(dirty.x>=0&&dirty.x+dirty.width<=epd_rotated_display_width());
+     assert(dirty.y>=0&&dirty.y+dirty.height<=layer_height);
+     if(key==4){
+      assert(dirty.y>UI_QUICK_CIRCLE_Y+UI_QUICK_RADIUS);
+      EpdRect track=ui_quick_menu_frontlight_track(&menu,UI_QUICK_CTL_BRIGHTNESS);
+      if(ui_quick_menu_landscape())assert(dirty.x+dirty.width<track.x);
+      else assert(dirty.y+dirty.height<UI_QUICK_FL_BRI_HIT_Y0+ui_quick_menu_row_offset(&menu));
+     }
+     for(int other=0;other<key;++other){EpdRect r=key_rect(&menu,other);
+      assert(dirty.x+dirty.width<r.x||r.x+r.width<dirty.x||dirty.y+dirty.height<r.y||r.y+r.height<dirty.y);
+     }
+     if(fl==1)for(int ctl=UI_QUICK_CTL_BRIGHTNESS;ctl<=UI_QUICK_CTL_CCT;++ctl){
+      EpdRect r=ui_quick_menu_frontlight_hit(&menu,(ui_quick_control_t)ctl);
+      assert(dirty.x+dirty.width<r.x||r.x+r.width<dirty.x||dirty.y+dirty.height<r.y||r.y+r.height<dirty.y);
+     }
+     for(int y=0;y<layer_height;++y)for(int x=0;x<epd_rotated_display_width();++x)
+      if(x<dirty.x||x>=dirty.x+dirty.width||y<dirty.y||y>=dirty.y+dirty.height)assert(pixel(frame,x,y)==pixel(again,x,y));
+     ui_quick_menu_draw(frame,&menu,true,false);
+    }
    }
   }
   // 图标固定，双向拖动仅改变黑白像素；松手重绘无变化且不越出脏区。
   // Fixed icons leave only binary changes during bidirectional drags; release is idempotent and stays within dirty bounds.
-  ui_quick_menu_t slider={.frontlight=true,.fl_on=true};
+  for(int reader=0;reader<2;++reader){
+  ui_quick_menu_t slider={.frontlight=true,.fl_on=true,.rotation_available=reader!=0};
   memset(frame,255,BYTES);ui_quick_menu_draw(frame,&slider,false,false);
   const uint8_t values[]={1,25,80,100,70,20,0};
   for(int c=UI_QUICK_CTL_BRIGHTNESS;c<=UI_QUICK_CTL_CCT;++c)for(unsigned i=0;i<sizeof(values);++i){
@@ -130,6 +162,7 @@ int main(void){
    memset(fresh,255,BYTES);ui_quick_menu_draw(fresh,&slider,false,false);
    assert(!memcmp(frame,fresh,BYTES));
    memcpy(again,frame,BYTES);assert(ui_quick_menu_draw_control(frame,&slider,c,&dirty));assert(!memcmp(frame,again,BYTES));
+  }
   }
   for(fast=false;;fast=true){
    patterned();ui_click_feedback_begin(frame);

@@ -53,6 +53,9 @@ static void shelf_category_remember(app_ctx_t *ctx){(void)ctx;}
 static void book_shelf_categories_menu_close(int *value){(void)value;}
 static void lock_draw(void){}
 static void invalidate_prep(void){}
+static int s_orientation;
+static void reader_orientation_cancel(int *state){(void)state;}
+static bool on_system_overlay(app_ctx_t *ctx){(void)ctx;return false;}
 static void unlock_draw(void){}
 static void save_progress(void){}
 static void book_progress_set_last_path(const char *p){assert(!strcmp(p,"/book.epub"));++latest;}

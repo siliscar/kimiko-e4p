@@ -30,6 +30,7 @@ SUITES = {
     "architecture": [sys.executable, "tools/architecture_host_test.py"],
     "builtin_images": [sys.executable, "tools/builtin_image_host_test.py"],
     "heading": [sys.executable, "tools/reader_title_style_host_test.py"],
+    "orientation": [sys.executable, "tools/reader_orientation_host_test.py"],
     "font_policy": [sys.executable, "tools/lock_font_host_test.py"],
     "memory": [sys.executable, "tools/reader_memory_host_test.py"],
     "source_memory": [sys.executable, "tools/reader_source_memory_host_test.py"],

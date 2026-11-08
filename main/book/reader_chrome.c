@@ -26,7 +26,7 @@
 
 /* ---- 几何与常量 / Geometry and constants ---- */
 #define CHROME_LEFT_X 36
-#define CHROME_RIGHT_X 648
+#define CHROME_RIGHT_X (epd_rotated_display_width() - 36)
 #define CHROME_SLOT_GAP 24
 // 电池图标占位与 ui_nav_battery_draw 的 40px 机身加 2px 余量一致，右对齐时仍落 606。
 // The icon box matches ui_nav_battery_draw's 40 px body plus 2 px slack, so right alignment keeps x=606.

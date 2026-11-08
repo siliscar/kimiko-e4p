@@ -23,7 +23,7 @@ static void copy_text(char* dst, size_t cap, const char* src) {
 }
 
 EpdRect reader_heading_band(int top) {
-    return (EpdRect){36, top, UI_LOCK_WIDTH - 72, READER_HEADING_BAND_HEIGHT};
+    return (EpdRect){36, top, epd_rotated_display_width() - 72, READER_HEADING_BAND_HEIGHT};
 }
 
 // 长度类几何（高度、宽度、内边距）按字号缩放。

@@ -16,6 +16,7 @@ unit=r'''
 #include <stdlib.h>
 #define UI_NAV_TOP 1096
 #define UI_LOCK_WIDTH 684
+#define READER_WIDTH 684
 #define UI_LOCK_HEIGHT 1216
 #define UI_GRAY_WHITE 255
 #define UI_GRAY_BLACK 0

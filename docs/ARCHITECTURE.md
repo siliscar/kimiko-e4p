@@ -65,6 +65,8 @@ After frontlight and radios stop, board sleep cuts the P14 Bluetooth/amplifier s
 
 ## 依赖规则 / Dependency rules
 
+- 阅读方向由 `app_book` 持有会话状态，与晃动翻页共用传感器采样；`reader_orientation` 只判稳定重力，`display_orientation` 只映射显示方向及触点。UI 任务在绘制锁内交还预绘、更新几何并按字节锚点重排，失败恢复旧布局。阅读正文/工具栏可四向显示，系统菜单、锁屏、目录及设置暂用正常竖屏；离开/关书清空自动状态。`app_desc_t` 的可选回调连接顶部快捷栏与系统遮罩，`render()` 保持纯绘制。/ `app_book` owns session orientation and shares sensor sampling with shake paging; `reader_orientation` only detects stable gravity and `display_orientation` maps direction/contacts. The UI task joins prefetch, changes geometry and reflows around a byte anchor under the draw lock, restoring the old layout on failure. Body/tools support four directions; system menus, lock, TOC and settings temporarily use portrait, and closing/leaving clears auto mode. Optional page callbacks connect quick controls/system overlays while render remains paint-only. See [方向契约](development/guides/READER_ORIENTATION.md).
+
 - 页面通过 app 中的公开契约协作，不包含另一个页面的实现。app 的调度代码不得包含 apps 目录的头文件。跨页请求仍由对应页面消费，不能借移动头文件改变生命周期。
   Pages collaborate through app contracts without including another page implementation. App coordinators must not include apps headers. The target page still consumes each cross-page request; moving a header does not transfer lifecycle ownership.
 - 阅读页面只在成功开书、成功翻页和有效正文计时后通知手账服务；锁屏与离页尝试保存。`reading_journal_model`不读时钟或文件，`reading_journal`持有内存与存储，`ui_reading_journal`只绘制借用快照。日期、章节口径、轮换和容量上限见手账契约。

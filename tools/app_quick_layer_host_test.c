@@ -40,6 +40,13 @@ static void enter(app_ctx_t *c) {assert(c == &ctx); ++enters; record(2, enters);
 static void leave(app_ctx_t *c) {assert(c == &ctx); ++exits; record(3, exits);}
 static bool normalize(app_ctx_t *c) {assert(c == &ctx); return hold_gray;}
 static const app_desc_t page = {.render = render, .normalize_hold_gray = normalize};
+static bool rotate_available=true,rotate_enabled;
+static unsigned rotate_toggles;
+static bool rotation_available(app_ctx_t *c){assert(c==&ctx);return rotate_available;}
+static bool rotation_enabled(app_ctx_t *c){assert(c==&ctx);return rotate_enabled;}
+static void rotation_toggle(app_ctx_t *c){assert(c==&ctx);rotate_enabled=!rotate_enabled;++rotate_toggles;}
+static const app_desc_t reader_page={.render=render,.rotation_available=rotation_available,
+    .rotation_enabled=rotation_enabled,.on_rotation_toggle=rotation_toggle};
 const app_desc_t app_transfer = {.render = render, .on_enter = enter, .on_exit = leave};
 const app_desc_t app_device_settings = {.render = render, .on_enter = enter, .on_exit = leave};
 static const app_desc_t *current = &page;
@@ -92,14 +99,14 @@ void ui_quick_menu_draw(uint8_t *buffer, const ui_quick_menu_t *m, bool wifi, bo
 void ui_quick_menu_end(void) {record(26, 0);}
 void ui_quick_menu_draw_status(uint8_t *buffer) {assert(buffer == fb); record(27, 0);}
 EpdRect ui_quick_menu_rect(const ui_quick_menu_t *m) {
-    return (EpdRect){0, 0, 684, m->frontlight && (m->fl_on || m->fl_expanded)
-        ? UI_QUICK_FRONTLIGHT_HEIGHT : UI_QUICK_HEIGHT};
+    return (EpdRect){0, 0, 684, ui_quick_menu_height(m)};
 }
 bool ui_quick_menu_draw_button(uint8_t *buffer, const ui_quick_menu_t *m,
                                int button, bool active, bool pressed, EpdRect *dirty) {
-    assert(buffer == fb); (void)m;
+    assert(buffer == fb);
     record(28, button); record(29, active); record(30, pressed);
-    *dirty = (EpdRect){(button * 2 + 1) * 684 / 8 - 54, 102, 108, 108}; return true;
+    *dirty = (EpdRect){ui_quick_menu_button_x(m,button,684) - 54,
+        ui_quick_menu_button_y(m,button) - 54, 108, 108}; return true;
 }
 bool ui_quick_menu_draw_control(uint8_t *buffer, const ui_quick_menu_t *m,
                                 ui_quick_control_t control, EpdRect *dirty) {
@@ -107,7 +114,7 @@ bool ui_quick_menu_draw_control(uint8_t *buffer, const ui_quick_menu_t *m,
     if (!m->fl_on || (control != UI_QUICK_CTL_BRIGHTNESS && control != UI_QUICK_CTL_CCT)) return false;
     ++rows; record(31, control); record(32, m->fl_bri); record(33, m->fl_cct);
     record(34, m->fl_bri_dirty); record(35, m->fl_cct_dirty);
-    *dirty = (EpdRect){40, control == UI_QUICK_CTL_BRIGHTNESS ? 244 : 344, 604, 80}; return true;
+    *dirty = (EpdRect){40, (control == UI_QUICK_CTL_BRIGHTNESS ? 244 : 344) + ui_quick_menu_row_offset(m), 604, 80}; return true;
 }
 static enum EpdDrawError push(unsigned kind, const void *wave, int mode, EpdRect area) {
     last_kind = kind; last_wave = wave; last_mode = mode; last_area = area;
@@ -292,6 +299,15 @@ int main(void) {
     }
     app_quick_layer_reset(); p = pushes;
     app_quick_layer_flush_frontlight(&ctx, current); assert(pushes == p);
+    // 页面回调直接控制自动/锁定；重复点击不换页，其他页面不暴露第五枚。
+    // Page callbacks toggle auto/lock directly; repeated taps stay on-page and other pages omit the fifth key.
+    open_layer();current=&reader_page;
+    for(int i=0;i<2;++i){
+        (void)frame(true,true,false,85,296,10,false);app_quick_layer_present_buttons(&ctx,current);
+        (void)frame(false,false,true,85,296,10,false);
+        assert(rotate_toggles==(unsigned)i+1&&rotate_enabled==(i==0)&&app_quick_layer_is_open()&&!ctx.request_app);
+    }
+    app_quick_layer_reset();rotate_available=false;current=&page;
     printf("QUICK_TRACE %016" PRIx64 " applies=%u rows=%u pushes=%u failures=%u\n", trace, applies, rows, pushes, failures);
     return 0;
 }

@@ -8,6 +8,9 @@ ROOT=Path(__file__).resolve().parents[1]
 book=ROOT/'main/apps/app_book.c'
 s=book.read_text()
 unit=r'''
+#define READER_WIDTH 684
+#define READER_HEIGHT 1216
+#define READER_BAR_TOP 1096
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>

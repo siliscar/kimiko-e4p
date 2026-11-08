@@ -8,6 +8,7 @@
 int ui_key_hit_test(uint16_t x,uint16_t y){(void)x;return y>1216?0:-1;}
 static ui_quick_menu_t menu;
 static int64_t time_ms;
+static int screen_width=684;
 
 static ui_quick_event_t feed(int x,int y,int count,bool pressed,bool released,bool allowed,bool owned){
  app_touch_t touch={.x=x,.y=y,.count=count,.touched=count!=0};
@@ -243,5 +244,73 @@ int main(void){
  assert(feed(300,300,1,true,false,true,true).control==UI_QUICK_CTL_NONE);
  assert(feed(300,300,0,false,true,true,true).action==UI_QUICK_CLOSE);
  puts("PASS: no-frontlight boards keep the lock key, the 264px layer and ignore card hits");
+ // 竖屏滑杆在下方、横屏滑杆在右侧；方向键仍在第二排，按钮/间隙/滑杆独立命中。
+ // Portrait sliders sit below and landscape sliders sit right; orientation stays in row two with disjoint key/gap/slider hits.
+ for(screen_width=684;screen_width<=1216;screen_width+=532){
+  menu.rotation_available=true;menu.rotation_enabled=true;open();
+  assert(ui_quick_menu_button_count(&menu)==5&&menu.rotation_enabled);
+  const ui_quick_action_t actions[]={UI_QUICK_WIFI,UI_QUICK_BLUETOOTH,UI_QUICK_FULL,UI_QUICK_LOCK,UI_QUICK_ROTATION};
+  for(int i=0;i<5;++i){
+   int x=ui_quick_menu_button_x(&menu,i,screen_width);
+   int y=ui_quick_menu_button_y(&menu,i);
+   assert(x==(screen_width>684?102+(i==4?0:i)*140:(i==4?screen_width/8:(2*i+1)*screen_width/8)));
+   assert(y==(i==4?296:156));
+   assert(feed(x,y,1,true,false,true,true).action==UI_QUICK_NONE&&ui_quick_menu_pressed(&menu)==i);
+   assert(feed(x,y,0,false,true,true,true).action==actions[i]);
+  }
+  int x=ui_quick_menu_button_x(&menu,4,screen_width);
+  feed(x,296,1,true,false,true,true);time_ms+=600;
+  assert(feed(x,296,1,false,false,true,true).action==UI_QUICK_NONE&&menu.open);
+  assert(feed(x,296,0,false,true,true,true).action==UI_QUICK_ROTATION);
+  assert(ui_quick_menu_height(&menu)==404);
+  ui_quick_menu_set_frontlight(&menu,true,true,40,50);
+  assert(ui_quick_menu_height(&menu)==(screen_width>684?404:620));
+  feed(x,296,1,true,false,true,true);
+  assert(feed(x,296,0,false,true,true,true).action==UI_QUICK_ROTATION);
+  for(int ctl=UI_QUICK_CTL_BRIGHTNESS;ctl<=UI_QUICK_CTL_CCT;++ctl){
+   EpdRect track=ui_quick_menu_frontlight_track(&menu,(ui_quick_control_t)ctl);
+   int cy=track.y+track.height/2;
+   e=feed(track.x+track.width/2,cy,1,true,false,true,true);
+   assert(e.control==(ui_quick_control_t)ctl&&e.value==50&&!e.commit);
+   e=feed(track.x-8,cy,1,false,false,true,true);
+   assert(e.control==(ui_quick_control_t)ctl&&e.value==(ctl==UI_QUICK_CTL_BRIGHTNESS?1:0));
+   e=feed(track.x+track.width+7,cy,1,false,false,true,true);
+   assert(e.control==(ui_quick_control_t)ctl&&e.value==100);
+   assert(feed(track.x+track.width+7,cy,0,false,true,true,true).commit);
+  }
+  if(screen_width==1216){
+   assert(feed(610,156,1,true,false,true,true).control==UI_QUICK_CTL_NONE&&ui_quick_menu_pressed(&menu)==-1);
+   assert(feed(610,156,0,false,true,true,true).action==UI_QUICK_NONE&&menu.open);
+   assert(feed(300,424,1,true,false,true,true).control==UI_QUICK_CTL_NONE);
+   assert(feed(300,424,0,false,true,true,true).action==UI_QUICK_CLOSE&&!menu.open);open();
+   for(int key=0;key<2;++key){
+    int kx=102+140*key;
+    feed(kx,156,1,true,false,true,true);time_ms+=UI_QUICK_HOLD_SETTINGS_MS;
+    assert(feed(kx,156,1,false,false,true,true).action==(key==0?UI_QUICK_WIFI_SETTINGS:UI_QUICK_BLUETOOTH_SETTINGS));
+    feed(kx,156,0,false,true,true,true);open();
+   }
+   ui_quick_menu_set_frontlight(&menu,true,false,40,50);open();
+   assert(ui_quick_menu_height(&menu)==404);
+   assert(feed(910,156,1,true,false,true,true).control==UI_QUICK_CTL_NONE);
+   assert(feed(910,156,0,false,true,true,true).action==UI_QUICK_NONE);
+   feed(610,190,1,true,false,true,true);
+   assert(feed(610,270,1,false,false,true,true).action==UI_QUICK_EXPAND&&menu.fl_expanded);
+   feed(610,270,0,false,true,true,true);
+   assert(ui_quick_menu_height(&menu)==404);
+   assert(feed(914,156,1,true,false,true,true).control==UI_QUICK_CTL_BRIGHTNESS);
+   assert(feed(914,156,0,false,true,true,true).commit&&!menu.fl_on);
+   assert(feed(522,156,1,true,false,true,true).control==UI_QUICK_CTL_NONE);
+   assert(feed(522,156,0,false,true,true,true).control==UI_QUICK_CTL_ON&&menu.fl_on);
+   assert(feed(522,156,1,true,false,true,true).control==UI_QUICK_CTL_NONE);
+   assert(feed(522,156,0,false,true,true,true).control==UI_QUICK_CTL_ON&&!menu.fl_on);
+   assert(ui_quick_menu_height(&menu)==404&&!menu.fl_expanded);
+  }
+  ui_quick_menu_set_frontlight(&menu,false,false,40,50);
+  menu.rotation_available=false;ui_quick_menu_reset(&menu);assert(ui_quick_menu_button_count(&menu)==4);
+ }
+ puts("PASS: responsive two-column landscape and stacked portrait keep controls, slider endpoints, holds and light expansion distinct");
  return 0;
 }
+
+int epd_rotated_display_width(void) { return screen_width; }
+int epd_rotated_display_height(void) { return screen_width==684?1216:684; }

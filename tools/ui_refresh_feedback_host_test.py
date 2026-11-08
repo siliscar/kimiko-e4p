@@ -16,8 +16,11 @@ def function(path, name):
 
 
 shelf = r'''
+#define READER_WIDTH 684
+#define READER_HEIGHT 1216
 #include <assert.h>
 #include <stdbool.h>
+static bool reader_orientation_sync(void){return false;}
 #include <stdint.h>
 #include <stdio.h>
 #include <string.h>
@@ -383,6 +386,8 @@ nav_header = (root / "main/ui/ui_nav.h").read_text()
 # UI_STATUS_TIME_PX moved to ui_nav.h for the reader header; extract defines from both files.
 defines = "\n".join(re.findall(r"^#define (?:UI_NAV_(?:NETWORK|BOLT)_ICON_PX|UI_STATUS_\w+_PX) .+$", nav + nav_header, re.M))
 status = r'''
+static int screen_width=684;
+#define epd_rotated_display_width() screen_width
 #include <assert.h>
 #include <stdbool.h>
 #include <stdint.h>
@@ -451,6 +456,7 @@ for name in ('status_time','clock_text','ui_nav_clock_text','ui_nav_status'):
 status += r'''
 int main(void){
  uint8_t fb=0;const int percentages[]={0,9,78,100,-1};
+ for(screen_width=684;screen_width<=1216;screen_width+=532){
  for(int font=0;font<2;++font)for(int mask=0;mask<4;++mask)for(unsigned p=0;p<5;++p){
    reading_context=false;chosen_system=s_system_ttf=font;wifi=mask&1;bluetooth=mask&2;pct=percentages[p];text_count=0;network_left=1000;
    snprintf(signature,sizeof(signature),"时间统一 · 正在阅读我的收藏书籍，保持热爱 ABCabc");
@@ -459,8 +465,8 @@ int main(void){
    for(int i=0;i<3;++i)assert(texts[i].center>=39&&texts[i].center<=41);
    assert(texts[0].right+12<=texts[1].left);
    assert(texts[1].right+12<=(mask?network_left:texts[2].left));
-   assert(texts[2].right==595&&texts[1].align==EPD_DRAW_ALIGN_CENTER);
-   assert(texts[1].left+texts[1].right>=683&&texts[1].left+texts[1].right<=685);
+   assert(texts[2].right==screen_width-89&&texts[1].align==EPD_DRAW_ALIGN_CENTER);
+   assert(texts[1].left+texts[1].right>=screen_width-1&&texts[1].left+texts[1].right<=screen_width+1);
    size_t length=strlen(texts[1].text);assert(length&&((unsigned char)texts[1].text[length-1]&0xc0)!=0xc0);
    char system_prefix[96];snprintf(system_prefix,sizeof(system_prefix),"%s",texts[1].text);
    int system_network_left=network_left;
@@ -469,6 +475,7 @@ int main(void){
    reading_context=true;s_system_ttf=false;ui_nav_status_font_context(true,true);text_count=0;network_left=1000;
    ui_nav_status(&fb);assert(text_count==3&&!strcmp(texts[1].text,system_prefix)&&network_left==system_network_left);
    assert(texts[0].right+12<=texts[1].left&&texts[1].right+12<=(mask?network_left:texts[2].left));
+ }
  }
  reading_context=false;ui_nav_status_font_context(false,false);
  signature[0]=0;text_count=0;ui_nav_status(&fb);assert(text_count==2);

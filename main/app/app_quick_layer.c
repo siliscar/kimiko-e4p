@@ -69,6 +69,11 @@ static unsigned quick_status(void) {
     return (wifi ? 1u : 0u) | (app_settings_ble_turner() ? 2u : 0u) | (status.network_ready ? 4u : 0u);
 }
 
+static void quick_rotation_sync(app_ctx_t *ctx, const app_desc_t *current) {
+    s_quick.rotation_available = current->rotation_available && current->rotation_available(ctx);
+    s_quick.rotation_enabled = s_quick.rotation_available && current->rotation_enabled && current->rotation_enabled(ctx);
+}
+
 // 同步输出完再接收下一条触摸，不安排旧层回放；错误时关闭层并可靠全刷当前页。
 // Complete presentation before accepting another contact, with no stale replay; close and full-refresh the current page on error.
 void app_quick_layer_present(app_ctx_t *ctx, const app_desc_t *current, bool full) {
@@ -83,7 +88,7 @@ void app_quick_layer_present(app_ctx_t *ctx, const app_desc_t *current, bool ful
     if(full&&s_quick.open){
         // 已合成的页面直接全刷，只还原圆键按压，不重排底页或重算玻璃。
         // Refresh the composed framebuffer directly, restoring only the pressed tile without underlay layout or glass regeneration.
-        for(int i=0;i<4;++i){
+        for(int i=0;i<ui_quick_menu_button_count(&s_quick);++i){
             bool active=i<2?(status&(1u<<i))!=0
                 :i==3&&s_quick.frontlight&&s_quick.fl_on;
             bool was_active=i<2?(s_quick_status&(1u<<i))!=0
@@ -111,12 +116,12 @@ void app_quick_layer_present(app_ctx_t *ctx, const app_desc_t *current, bool ful
     // whether to protect picture grays: only a background reading body does.
     display_refresh_intent_t intent = DISPLAY_REFRESH_OVERLAY;
     unsigned flags = DISPLAY_REFRESH_DEFAULT;
-    EpdRect area = {0, 0, UI_LOCK_WIDTH, area_height};
+    EpdRect area = {0, 0, epd_rotated_display_width(), area_height};
     if (!s_quick.open) {
         intent = DISPLAY_REFRESH_RESTORE;
         if (current->normalize_hold_gray && current->normalize_hold_gray(ctx))
             flags = DISPLAY_REFRESH_HOLD_GRAY;
-        area.height = UI_LOCK_HEIGHT;
+        area.height = epd_rotated_display_height();
     }
     enum EpdDrawError error = full ? update_display_full(ctx->hl)
         : display_refresh_area(ctx->hl, intent, area, flags);
@@ -134,7 +139,7 @@ void app_quick_layer_present_buttons(app_ctx_t *ctx,const app_desc_t *current) {
     unsigned status=quick_status();
     int pressed=ui_quick_menu_pressed(&s_quick);
     enum EpdDrawError error=EPD_DRAW_SUCCESS;
-    for(int i=0;i<4;++i){
+    for(int i=0;i<ui_quick_menu_button_count(&s_quick);++i){
         bool active=i<2?(status&(1u<<i))!=0
             :i==3&&s_quick.frontlight&&s_quick.fl_on;
         bool was_active=i<2?(s_quick_status&(1u<<i))!=0
@@ -150,7 +155,7 @@ void app_quick_layer_present_buttons(app_ctx_t *ctx,const app_desc_t *current) {
     bool network_changed=(status&5u)==5u,was_network=(s_quick_status&5u)==5u;
     if(error==EPD_DRAW_SUCCESS&&(((status^s_quick_status)&2u)||network_changed!=was_network)){
         ui_quick_menu_draw_status(ctx->fb);
-        error=display_refresh_area(ctx->hl, DISPLAY_REFRESH_DETAIL, (EpdRect){0,0,UI_LOCK_WIDTH,76}, DISPLAY_REFRESH_DEFAULT);
+        error=display_refresh_area(ctx->hl, DISPLAY_REFRESH_DETAIL, (EpdRect){0,0,epd_rotated_display_width(),76}, DISPLAY_REFRESH_DEFAULT);
         guard_draw_result(ctx->hl,error);
     }
     if(error!=EPD_DRAW_SUCCESS){
@@ -262,6 +267,7 @@ static void quick_reenter_page(app_ctx_t *ctx, const app_desc_t *current) {
 // the frame. The normal tick and sampler replay share it so replay never drops a press edge.
 bool app_quick_layer_feed_frame(app_ctx_t *ctx, const app_desc_t *current, bool *lock_requested,
                              bool coalesce) {
+    quick_rotation_sync(ctx, current);
     ui_quick_event_t event;
     bool owned = ui_quick_menu_feed(&s_quick, ctx,
         current->render && !current->holds_pmu && !usb_storage_active() && !pico_online_busy(),
@@ -322,6 +328,16 @@ bool app_quick_layer_feed_frame(app_ctx_t *ctx, const app_desc_t *current, bool 
         }
     } else if (event.action == UI_QUICK_FULL) app_quick_layer_present(ctx, current, true);
     else if (event.action == UI_QUICK_LOCK) *lock_requested = true;
+    else if (event.action == UI_QUICK_ROTATION && s_quick.rotation_available && current->on_rotation_toggle) {
+        current->on_rotation_toggle(ctx);
+        quick_rotation_sync(ctx, current);
+        EpdRect dirty;
+        if (ui_quick_menu_draw_button(ctx->fb, &s_quick, 4, s_quick.rotation_enabled, false, &dirty)) {
+            enum EpdDrawError error = display_refresh_area(ctx->hl, DISPLAY_REFRESH_FEEDBACK, dirty, DISPLAY_REFRESH_DEFAULT);
+            guard_draw_result(ctx->hl, error);
+            if (error != EPD_DRAW_SUCCESS) { app_quick_layer_reset(); app_present(ctx,current,APP_REDRAW_FULL); }
+        }
+    }
     if (event.control != UI_QUICK_CTL_NONE) quick_frontlight_event(ctx, current, &event, coalesce);
     return owned;
 }

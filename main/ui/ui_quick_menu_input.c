@@ -9,54 +9,57 @@
 #include "ui_kit.h"
 #include "ui_menu.h"
 
-// 圆键之后的卡片命中编号；ui_quick_menu_pressed 只把 0..3 当作按住的圆键。
-// Card hit ids follow the circles; ui_quick_menu_pressed only treats 0..3 as a held key.
-enum { HIT_BRIGHTNESS = 4, HIT_CCT = 5 };
-
-static int center_x(int button) { return (button * 2 + 1) * UI_LOCK_WIDTH / 8; }
+// 滑杆命中编号位于最多五枚圆键之后。/ Slider hit ids follow the maximum of five circle keys.
+enum { HIT_BRIGHTNESS = 5, HIT_CCT = 6 };
 
 // 层高随开灯或临时展开伸缩：熄灯且未下拉展开时胶囊收起，只剩圆钮区，与绘图侧
 // ui_quick_menu_rect 一致。
 // The layer height follows the light or the session expansion: without either the
 // capsule collapses to the circle band, matching ui_quick_menu_rect on the drawing side.
 static int layer_height(const ui_quick_menu_t *menu) {
-    return menu->frontlight && (menu->fl_on || menu->fl_expanded)
-        ? UI_QUICK_FRONTLIGHT_HEIGHT : UI_QUICK_HEIGHT;
+    return ui_quick_menu_height(menu);
 }
 
-static int circle_hit(int x, int y) {
-    for (int i = 0; i < 4; ++i) {
-        const int dx = x - center_x(i), dy = y - UI_QUICK_CIRCLE_Y;
-        if (dx * dx + dy * dy <= UI_QUICK_HIT_RADIUS * UI_QUICK_HIT_RADIUS) return i;
+static int circle_hit(const ui_quick_menu_t *menu, int x, int y) {
+    const int width = epd_rotated_display_width();
+    const int count = ui_quick_menu_button_count(menu);
+    const int radius = width / 8 < UI_QUICK_HIT_RADIUS ? width / 8 : UI_QUICK_HIT_RADIUS;
+    for (int i = 0; i < count; ++i) {
+        const int dx = x - ui_quick_menu_button_x(menu, i, width), dy = y - ui_quick_menu_button_y(menu, i);
+        if (dx * dx + dy * dy <= radius * radius) return i;
     }
     return -1;
 }
 
 static int hit_test(const ui_quick_menu_t *menu, int x, int y) {
-    int key = circle_hit(x, y);
+    int key = circle_hit(menu, x, y);
     if (key >= 0) return key;
     // 胶囊行只在开灯或本次开层下拉展开时存在；否则卡片区域不是命中目标，也不
     // 命中第四枚以外的键。
     // Capsule rows exist while the light is on or the layer was pulled open this
     // session; otherwise the card area matches nothing.
     if (!menu->frontlight || (!menu->fl_on && !menu->fl_expanded)) return -1;
-    if (x >= 40 && x < UI_LOCK_WIDTH - 40 &&
-        y >= UI_QUICK_FL_BRI_HIT_Y0 && y <= UI_QUICK_FL_BRI_HIT_Y1) return HIT_BRIGHTNESS;
-    if (x >= 40 && x < UI_LOCK_WIDTH - 40 &&
-        y >= UI_QUICK_FL_CCT_HIT_Y0 && y <= UI_QUICK_FL_CCT_HIT_Y1) return HIT_CCT;
+    for (int control = UI_QUICK_CTL_BRIGHTNESS; control <= UI_QUICK_CTL_CCT; ++control) {
+        const EpdRect hit = ui_quick_menu_frontlight_hit(menu, (ui_quick_control_t)control);
+        if (x >= hit.x && x < hit.x + hit.width && y >= hit.y && y < hit.y + hit.height)
+            return control == UI_QUICK_CTL_BRIGHTNESS ? HIT_BRIGHTNESS : HIT_CCT;
+    }
     return -1;
 }
 
-static uint8_t slider_value(int hit, int x) {
-    if (x < UI_QUICK_FL_TRACK_X) x = UI_QUICK_FL_TRACK_X;
-    const int right = UI_QUICK_FL_TRACK_X + UI_QUICK_FL_TRACK_W;
+static uint8_t slider_value(const ui_quick_menu_t *menu, int hit, int x) {
+    const EpdRect track = ui_quick_menu_frontlight_track(menu,
+        hit == HIT_BRIGHTNESS ? UI_QUICK_CTL_BRIGHTNESS : UI_QUICK_CTL_CCT);
+    if (x < track.x) x = track.x;
+    const int right = track.x + track.width;
     if (x > right) x = right;
-    int value = (x - UI_QUICK_FL_TRACK_X) * 100 / UI_QUICK_FL_TRACK_W;
+    int value = (x - track.x) * 100 / track.width;
     if (hit == HIT_BRIGHTNESS && value < 1) value = 1;
     return (uint8_t)value;
 }
 
 void ui_quick_menu_reset(ui_quick_menu_t *menu) {
+    const bool rotation_available = menu->rotation_available, rotation_enabled = menu->rotation_enabled;
     const bool frontlight = menu->frontlight;
     const bool on = menu->fl_on;
     const uint8_t bri = menu->fl_bri ? menu->fl_bri : 40;
@@ -64,6 +67,8 @@ void ui_quick_menu_reset(ui_quick_menu_t *menu) {
     const uint8_t bri_dirty = menu->fl_bri_dirty;
     const uint8_t cct_dirty = menu->fl_cct_dirty;
     memset(menu, 0, sizeof(*menu));
+    menu->rotation_available = rotation_available;
+    menu->rotation_enabled = rotation_enabled;
     menu->frontlight = frontlight;
     menu->fl_on = on;
     menu->fl_bri = bri;
@@ -98,7 +103,7 @@ void ui_quick_menu_cancel_input(ui_quick_menu_t *menu) {
 }
 
 int ui_quick_menu_pressed(const ui_quick_menu_t *menu) {
-    return menu->open && menu->tracking && !menu->moved && menu->hit >= 0 && menu->hit < 4
+    return menu->open && menu->tracking && !menu->moved && menu->hit >= 0 && menu->hit < ui_quick_menu_button_count(menu)
         ? menu->hit : -1;
 }
 
@@ -207,7 +212,7 @@ bool ui_quick_menu_feed(ui_quick_menu_t *menu, const app_ctx_t *ctx, bool allowe
     // 滑杆按下即定位：不等拖动阈值，手指落在哪一档就应用到哪一档。
     // A slider positions itself on touch: apply the tapped step before the drag threshold.
     if (menu->open && (menu->hit == HIT_BRIGHTNESS || menu->hit == HIT_CCT)) {
-        const uint8_t value = slider_value(menu->hit, x);
+        const uint8_t value = slider_value(menu, menu->hit, x);
         // 脏范围只增不减：记录本次定稿以来达到的最大档位，松手据此洗白。
         // The dirty extent only grows: track the highest level since the last settle for the whitening stage.
         if (menu->hit == HIT_BRIGHTNESS) {
@@ -267,9 +272,9 @@ bool ui_quick_menu_feed(ui_quick_menu_t *menu, const app_ctx_t *ctx, bool allowe
                 event->control = UI_QUICK_CTL_ON;
                 event->value = menu->fl_on ? 1 : 0;
                 event->commit = true;
-            } else if (menu->hit >= 0 && menu->hit < 4 && circle_hit(x, y) == menu->hit) {
+            } else if (menu->hit >= 0 && menu->hit < ui_quick_menu_button_count(menu) && circle_hit(menu, x, y) == menu->hit) {
                 static const ui_quick_action_t actions[] = {
-                    UI_QUICK_WIFI, UI_QUICK_BLUETOOTH, UI_QUICK_FULL, UI_QUICK_LOCK,
+                    UI_QUICK_WIFI, UI_QUICK_BLUETOOTH, UI_QUICK_FULL, UI_QUICK_LOCK, UI_QUICK_ROTATION,
                 };
                 event->action = actions[menu->hit];
             } else if (menu->drag != UI_QUICK_CTL_NONE) {

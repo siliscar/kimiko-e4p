@@ -75,6 +75,8 @@ idf_component_register(
         "ota/ota_auto.c"
         "ota/ota_release.c"
         "display/display.c"
+        "display/display_orientation.c"
+        "book/reader_orientation.c"
         "display/display_refresh.c"
         "display/display_refresh_policy.c"
         "display/display_refresh_context.c"

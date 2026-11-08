@@ -26,6 +26,16 @@
  * 用户新增：WiFi 与蓝牙圆键按住 0.5 秒直接进入各自的设置页；点按仍只切换开关。
  * User addition: holding the WiFi or Bluetooth circle for 0.5 s opens its settings
  * page; a tap still only toggles the switch.
+ * 用户修订：阅读旋转键独占第二排左侧，环形箭头围住开锁/闭锁；首排保留四枚圆键，
+ * 前光滑杆随第二排下移。其他页面保持原布局。
+ * User revision: the reader rotation key sits at the left of a second row, with
+ * a circular arrow around an open/closed lock. Keep four keys in the first row
+ * and shift the frontlight sliders below the second row; other pages retain their layout.
+ * 用户修订：横屏用左右分区，左侧四键紧凑排首行、旋转键留第二行，右侧双滑杆
+ * 分别对齐两行；面板高度收至两行，不把竖屏滑杆继续堆在下方。
+ * User revision: landscape groups four keys in the first left row and rotation
+ * in the second, with two right-side sliders aligned to those rows; the panel
+ * stays two rows tall instead of stacking portrait sliders below the keys.
  * 冻结：不访问硬件、设置或刷新，不申请帧缓存；只在展开/状态变化后由主循环调用绘图。
  * Frozen: No hardware, settings, presentation or frame allocations; the loop draws only on opening or state changes.
  */
@@ -50,6 +60,9 @@
 #define UI_QUICK_HEIGHT 264
 #define UI_QUICK_FRONTLIGHT_HEIGHT 480
 #define UI_QUICK_CIRCLE_Y 156
+#define UI_QUICK_ROTATION_ROW_STEP 140
+#define UI_QUICK_LANDSCAPE_COLUMN_STEP 140
+#define UI_QUICK_LANDSCAPE_TRACK_X 660
 #define UI_QUICK_RADIUS 54
 #define UI_QUICK_HIT_RADIUS 66
 
@@ -83,6 +96,7 @@ typedef enum {
     UI_QUICK_NONE, UI_QUICK_OPEN, UI_QUICK_CLOSE, UI_QUICK_EXPAND,
     UI_QUICK_WIFI, UI_QUICK_BLUETOOTH, UI_QUICK_FULL, UI_QUICK_LOCK,
     UI_QUICK_WIFI_SETTINGS, UI_QUICK_BLUETOOTH_SETTINGS,
+    UI_QUICK_ROTATION,
 } ui_quick_action_t;
 
 /// 前光控件；快捷层只产出事件，硬件和设置由主循环执行。
@@ -96,11 +110,12 @@ typedef enum {
 
 typedef struct {
     bool open, tracking, swallow, moved;
+    bool rotation_available, rotation_enabled; ///< 只由当前页面提供，不落盘 / Supplied by the current page, never persisted
     uint16_t x0, y0;
     int hit;
     int64_t started_ms;
-    /// 本板是否有前光；没有时第四枚圆钮画锁屏，不画卡片且层高仍是 UI_QUICK_HEIGHT。
-    /// Whether this board has a frontlight; without one the fourth circle keeps the lock, the card is omitted and the layer stays UI_QUICK_HEIGHT.
+    /// 本板是否有前光；没有时第四枚圆钮画锁屏，不画滑杆。
+    /// Whether this board has a frontlight; without one the fourth circle keeps the lock and sliders are omitted.
     bool frontlight;
     bool fl_on;
     /// 灯灭时继续下拉产生的本次开层临时展开；开层、收层与熄灯点按都会清零，
@@ -133,6 +148,57 @@ typedef struct {
     ui_quick_control_t drag;
 } ui_quick_menu_t;
 
+/// 绘图与命中共享布局；阅读方向键位于第二排左侧。/ Drawing and hit tests share the layout; the reader orientation key sits at the left of row two.
+static inline int ui_quick_menu_button_count(const ui_quick_menu_t *menu) {
+    return menu && menu->rotation_available ? 5 : 4;
+}
+static inline bool ui_quick_menu_landscape(void) {
+    return epd_rotated_display_width() > epd_rotated_display_height();
+}
+static inline int ui_quick_menu_button_x(const ui_quick_menu_t *menu, int button, int width) {
+    (void)menu;
+    if (ui_quick_menu_landscape())
+        return 48 + UI_QUICK_RADIUS + (button == 4 ? 0 : button) * UI_QUICK_LANDSCAPE_COLUMN_STEP;
+    return ((button == 4 ? 0 : button) * 2 + 1) * width / 8;
+}
+static inline int ui_quick_menu_row_offset(const ui_quick_menu_t *menu) {
+    return menu && menu->rotation_available ? UI_QUICK_ROTATION_ROW_STEP : 0;
+}
+static inline int ui_quick_menu_button_y(const ui_quick_menu_t *menu, int button) {
+    return UI_QUICK_CIRCLE_Y + (button == 4 ? ui_quick_menu_row_offset(menu) : 0);
+}
+static inline int ui_quick_menu_height(const ui_quick_menu_t *menu) {
+    if (ui_quick_menu_landscape())
+        return menu && (menu->rotation_available || (menu->frontlight && (menu->fl_on || menu->fl_expanded)))
+            ? UI_QUICK_HEIGHT + UI_QUICK_ROTATION_ROW_STEP : UI_QUICK_HEIGHT;
+    return (menu && menu->frontlight && (menu->fl_on || menu->fl_expanded)
+        ? UI_QUICK_FRONTLIGHT_HEIGHT : UI_QUICK_HEIGHT) + ui_quick_menu_row_offset(menu);
+}
+/// 滑杆绘图、数值换算与命中共用几何；横屏在右侧与两排圆键对齐。
+/// Slider painting, value mapping and hit tests share geometry; landscape aligns right-side tracks with the two key rows.
+static inline EpdRect ui_quick_menu_frontlight_track(const ui_quick_menu_t *menu, ui_quick_control_t control) {
+    if (control != UI_QUICK_CTL_BRIGHTNESS && control != UI_QUICK_CTL_CCT) return (EpdRect){0};
+    if (ui_quick_menu_landscape())
+        return (EpdRect){UI_QUICK_LANDSCAPE_TRACK_X,
+            UI_QUICK_CIRCLE_Y + (control == UI_QUICK_CTL_CCT ? UI_QUICK_ROTATION_ROW_STEP : 0) - UI_QUICK_FL_TRACK_H / 2,
+            epd_rotated_display_width() - UI_QUICK_LANDSCAPE_TRACK_X - 48, UI_QUICK_FL_TRACK_H};
+    return (EpdRect){UI_QUICK_FL_TRACK_X,
+        (control == UI_QUICK_CTL_CCT ? UI_QUICK_FL_CCT_CY : UI_QUICK_FL_BRI_CY)
+            + ui_quick_menu_row_offset(menu) - UI_QUICK_FL_TRACK_H / 2,
+        UI_QUICK_FL_TRACK_W, UI_QUICK_FL_TRACK_H};
+}
+/// 命中覆盖整行并留手指余量，左右分区间隙不响应滑杆。
+/// Hit zones cover each row with finger margins, leaving the inter-column gap inactive.
+static inline EpdRect ui_quick_menu_frontlight_hit(const ui_quick_menu_t *menu, ui_quick_control_t control) {
+    const EpdRect track = ui_quick_menu_frontlight_track(menu, control);
+    if (track.width <= 0) return (EpdRect){0};
+    if (ui_quick_menu_landscape())
+        return (EpdRect){track.x - 8, track.y - 22, track.width + 16, track.height + 44};
+    const int y0 = control == UI_QUICK_CTL_CCT ? UI_QUICK_FL_CCT_HIT_Y0 : UI_QUICK_FL_BRI_HIT_Y0;
+    const int y1 = control == UI_QUICK_CTL_CCT ? UI_QUICK_FL_CCT_HIT_Y1 : UI_QUICK_FL_BRI_HIT_Y1;
+    return (EpdRect){UI_QUICK_FL_ROW_X, y0 + ui_quick_menu_row_offset(menu), UI_QUICK_FL_ROW_W, y1 - y0 + 1};
+}
+
 typedef struct {
     ui_quick_action_t action;
     ui_quick_control_t control;
@@ -155,8 +221,8 @@ bool ui_quick_menu_feed(ui_quick_menu_t *menu, const app_ctx_t *ctx, bool allowe
 /// 取消接触但保留已打开的层；正在拖动的滑杆保留当前值，由主循环决定是否落盘。
 /// Cancel a contact while retaining an already open layer; a dragged slider keeps its value and the loop decides persistence.
 void ui_quick_menu_cancel_input(ui_quick_menu_t *menu);
-/// 只覆盖顶部，保留下层其他像素；开灯时连同卡片一起绘制，熄灯只有圆钮区。
-/// Cover the top only, leaving other pixels intact; draw the card while the light is on, otherwise only the circle band.
+/// 只覆盖顶部，保留下层其他像素；阅读时保留第二排，前光展开时在圆键下方画滑杆。
+/// Cover only the top, leaving other pixels intact; retain row two while reading and draw expanded sliders below the keys.
 void ui_quick_menu_draw(uint8_t *fb, const ui_quick_menu_t *menu, bool wifi, bool bluetooth);
 /// 当前按住的圆键，取消/滑出/释放或按住卡片时为-1。/ The held key, or -1 after cancellation, movement, release or a card press.
 int ui_quick_menu_pressed(const ui_quick_menu_t *menu);

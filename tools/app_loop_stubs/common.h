@@ -90,4 +90,5 @@ void board_sd_start_probe(void);
 int board_sd_remount(void);
 
 int epd_rotated_display_width(void);
+int epd_rotated_display_height(void);
 void epd_fill_triangle(int,int,int,int,int,int,uint8_t,uint8_t*);

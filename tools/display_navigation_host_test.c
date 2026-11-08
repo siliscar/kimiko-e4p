@@ -525,6 +525,20 @@ int main(void) {
         int count = calls; display_main_transition_cancel(); assert(calls == count);
     }
 
+    // 解锁及阅读返回清理不能被主页裁掉底栏，也必须驱动未变化像素。
+    // Unlock/reader-return cleanup must include navigation and unchanged pixels despite an armed main transition.
+    for (int same = 0; same < 2; ++same) {
+        reset(); target(0); begin(&owner_a);
+        if (!same) target(6);
+        int before_calls = calls, before_full = full_calls;
+        display_main_transition_arm(&owner_a, true, false);
+        display_request_full_refresh();
+        assert(update_display_fast_page(&hl) == EPD_DRAW_SUCCESS);
+        assert(calls == before_calls + 1 && full_calls == before_full + 1 && !clears);
+        assert(last_mode == MODE_GC16 && last_wave == &E0470_FULL_WAVEFORM);
+        assert(hl.waveform == &E0470_WAVEFORM); assert_final();
+    }
+
     // 失败从白底恢复最终图；恢复也失败时，下次局部输出先重建实际基准。
     // Recover failures from white to the final target; a failed recovery rebuilds the actual baseline before later local output.
     for (int error = 1; error <= 2; ++error) {

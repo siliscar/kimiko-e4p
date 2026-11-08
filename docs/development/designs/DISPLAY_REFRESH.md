@@ -49,6 +49,9 @@ Only READER_BODY accepts QUICK/IMAGE, READER_LAYOUT accepts QUICK, and RESTORE a
 
 ## 阅读状态与输出顺序 / Reader status and output order
 
+解锁恢复与退出阅读到主页面（包括同页返回书架）统一使用完整48相 `E0470_FULL_WAVEFORM`、GC16及整屏全像素输出，包含固定底栏和未变化像素。定时关机后启动恢复的首张目标页也使用这一策略。阅读返回按状态转场识别，与触发该动作的按键绑定无关。`display_request_full_refresh()` 只在目标输出成功后消费请求，失败重试保留48相；输出后恢复默认波形。锁屏出图成功时保留真实前后帧，不增加预清白；供电或输出故障仍按真实白底重建。日常阅读翻页、主页切页及未请求转场的手动全刷保持既有策略。软件验证不代表实屏残影改善。
+Unlocks and reader-to-main returns (including an in-app shelf return) use complete 48-phase `E0470_FULL_WAVEFORM`, GC16 and whole-screen full-pixel coverage, including fixed navigation and unchanged pixels. The first resumed frame after timed power-off uses the same policy. Reader returns are identified by the view transition, independently of the key binding that triggers the action. `display_request_full_refresh()` is consumed only on successful target output; retries retain 48 phases and output restores the default waveform. Successful lock output retains real frame references without an extra pre-clear; power/output faults retain physical-white reconstruction. Ordinary reader turns, main transitions and manual full refreshes without a transition request retain their policies. Software validation does not establish optical improvement.
+
 阅读正文静置时，分钟、电量及充电变化不单独触发顶部刷新；下一次正文翻页或整页重绘显示当前状态。窗口化页眉与系统状态栏共用80/160像素顶部带，全屏隐藏状态栏时不刷新顶部；主页面和快捷栏仍按原规则更新状态。
 Minute, battery and charging changes do not independently refresh a resting reader. The next body turn or whole-page redraw shows current status. Windowed headers and system status share the 80/160-pixel top band; full screen with a hidden status bar has no top output. Main pages and the quick layer retain their status rules.
 

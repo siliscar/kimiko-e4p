@@ -273,12 +273,49 @@ int main(void) {
     assert(update_display_area_diff_with(&hl, &E0470_WAVEFORM, MODE_GL16,
                                         (EpdRect){0,160,684,928}) == EPD_DRAW_SUCCESS);
     assert(full_draws == before_wake_full + 1 && last_mode == MODE_GC16);
+    assert(waveform_at_draw == &E0470_FULL_WAVEFORM && hl.waveform == &E0470_WAVEFORM);
     assert(update_display_area_diff_with(&hl, &E0470_WAVEFORM, MODE_GL16,
                                         (EpdRect){0,160,684,928}) == EPD_DRAW_SUCCESS);
     assert(full_draws == before_wake_full + 1 && last_mode == MODE_GL16);
     display_request_full_refresh();
     assert(update_display_fast_page(&hl) == EPD_DRAW_SUCCESS);
     assert(full_draws == before_wake_full + 2 && last_mode == MODE_GC16);
+    assert(waveform_at_draw == &E0470_FULL_WAVEFORM && hl.waveform == &E0470_WAVEFORM);
+    // 扫描失败保留48相请求，供电恢复重建也不能降回36相。
+    // Failed scans retain 48-phase requests, including full reconstruction after power recovery.
+    display_request_full_refresh();
+    next_draw_error = EPD_DRAW_OTHER_ERROR;
+    assert(update_display_full(&hl) == EPD_DRAW_OTHER_ERROR);
+    assert(waveform_at_draw == &E0470_FULL_WAVEFORM && hl.waveform == &E0470_WAVEFORM);
+    int before_retry_clears = clears;
+    assert(update_display_fast_page(&hl) == EPD_DRAW_SUCCESS);
+    assert(clears == before_retry_clears + 1 && white_baseline);
+    assert(waveform_at_draw == &E0470_FULL_WAVEFORM && hl.waveform == &E0470_WAVEFORM);
+    display_request_full_refresh(); power_failure = true;
+    assert(update_display_fast_page(&hl) == DISPLAY_DRAW_POWER_NOT_READY);
+    now_us += 1001000; power_failure = false;
+    assert(update_display_fast_page(&hl) == EPD_DRAW_SUCCESS);
+    assert(waveform_at_draw == &E0470_FULL_WAVEFORM && hl.waveform == &E0470_WAVEFORM);
+    assert(update_display_full(&hl) == EPD_DRAW_SUCCESS);
+    assert(waveform_at_draw == &E0470_WAVEFORM);
+    display_request_full_refresh();
+    next_draw_error = EPD_DRAW_EMPTY_LINE_QUEUE;
+    assert(update_display_full(&hl) == EPD_DRAW_EMPTY_LINE_QUEUE);
+    guard_draw_result(&hl, EPD_DRAW_EMPTY_LINE_QUEUE);
+    assert(waveform_at_draw == &E0470_FULL_WAVEFORM && hl.waveform == &E0470_WAVEFORM);
+    assert(update_display_full(&hl) == EPD_DRAW_SUCCESS && waveform_at_draw == &E0470_WAVEFORM);
+    // 页面自定义出口同样服从一次48相请求；成功时无预清白，失败时保持重试。
+    // Custom page exits also honor one 48-phase request, without pre-clearing on success and retaining failed retries.
+    for (unsigned path = 0; path < 16; ++path) {
+        memcpy(front, target, FB_BYTES); memset(back, 0x55, FB_BYTES);
+        int before_draws = draws, before_clears = clears, before_full = full_draws;
+        display_request_full_refresh();
+        assert(power_fault_present(&hl, path) == EPD_DRAW_SUCCESS);
+        assert(draws == before_draws + 1 && full_draws == before_full + 1 && clears == before_clears);
+        assert(last_mode == MODE_GC16 && waveform_at_draw == &E0470_FULL_WAVEFORM);
+        assert(hl.waveform == &E0470_WAVEFORM && !memcmp(front, back, FB_BYTES));
+        assert(update_display_full(&hl) == EPD_DRAW_SUCCESS && waveform_at_draw == &E0470_WAVEFORM);
+    }
 
     clocks = powerons = clears = draws = full_draws = last_mode = 0;
     guard_draw_result(&hl, EPD_DRAW_SUCCESS);

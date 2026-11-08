@@ -29,6 +29,8 @@
  * User revision: a low-level independent task owns the 100 ms idle shutdown from scan completion, without app-loop polling or book-open special cases.
  * 用户修订：完整显示组结束主动关电，100ms保留为空闲兜底；只在真实扫描前上电。
  * User revision: shut down at the end of complete display groups; retain 100 ms idle fallback and power on only for physical scans.
+ * 用户2026-11-08修订：解锁与阅读返回残影较重，转场请求使用完整48相GC16整屏全像素输出；成功后恢复原刷新策略。
+ * User revision 2026-11-08: use complete 48-phase full-pixel GC16 for requested unlock/reader-return transitions after heavy ghosting reports, then resume the existing policy on success.
 
  */
 
@@ -55,7 +57,10 @@
 static const char* TAG = "read_pico";
 static bool s_bulk_io;
 static bool s_full_refresh_requested;
-void display_request_full_refresh(void) { s_full_refresh_requested = true; }
+static bool s_complete_refresh_requested;
+void display_request_full_refresh(void) {
+    s_full_refresh_requested = s_complete_refresh_requested = true;
+}
 static int s_pclk_mhz = DISPLAY_PCLK_DEFAULT_MHZ;
 
 void display_set_bulk_io(bool active) {
@@ -676,20 +681,25 @@ bool display_take_white_exit(void) {
 }
 
 static enum EpdDrawError update_display_full_unlocked(EpdiyHighlevelState* hl) {
-    s_full_refresh_requested = false;
     display_main_transition_cancel();
-    epd_hl_waveform(hl, &E0470_WAVEFORM);
     if (!display_power_ready()) return DISPLAY_DRAW_POWER_NOT_READY;
+    const EpdWaveform* waveform = s_complete_refresh_requested ? &E0470_FULL_WAVEFORM : &E0470_WAVEFORM;
+    epd_hl_waveform(hl, waveform);
     enum EpdDrawError result;
-    if (s_power_fault) {
-        // 供电失败后的物理画面未知，先清物理屏，再从真实白底提交当前目标。
-        // Power failure leaves the optical frame unknown: clear the panel, then commit the current target from a real white baseline.
-        use_scan_for(&E0470_WAVEFORM, MODE_GC16);
+    if (s_power_fault || s_main_fault) {
+        // 供电或扫描失败后的物理画面未知，先清物理屏，再从真实白底提交当前目标。
+        // Power or scan failure leaves the optical frame unknown: clear the panel, then commit the current target from a real white baseline.
+        use_scan_for(waveform, MODE_GC16);
         epd_clear();
         result = epd_hl_update_screen_from_white(hl, MODE_GC16, 25);
         s_page_refreshes = 0;
+        if (result == EPD_DRAW_SUCCESS) s_main_fault = false;
         display_power_recovered(result);
-    } else result = hl_update(hl, &E0470_WAVEFORM, MODE_GC16, true, NULL, false);
+    } else result = hl_update(hl, waveform, MODE_GC16, true, NULL, false);
+    epd_hl_waveform(hl, &E0470_WAVEFORM);
+    // 失败保留完整转场请求，后续重试不能降回裁剪表。/ Retain the complete transition on failure so retries cannot fall back to the trimmed table.
+    if (result == EPD_DRAW_SUCCESS) s_full_refresh_requested = s_complete_refresh_requested = false;
+    else if (s_complete_refresh_requested) s_main_fault = true;
     return result;
 }
 
@@ -823,12 +833,18 @@ static void guard_draw_result_unlocked(EpdiyHighlevelState* hl, enum EpdDrawErro
     display_main_transition_cancel();
     s_pclk_mhz = DISPLAY_PCLK_SAFE_MHZ;
     board_epd_set_pclk(DISPLAY_PCLK_SAFE_MHZ);
-    use_scan_for(&E0470_WAVEFORM, MODE_GC16);
-    if (!display_power_ready()) return;
-    epd_clear();
     // 清物理屏后仅重置旧帧基准，保留目标页；否则局部刷新会留下整页白屏。
     // Reset only the old-frame baseline after clearing; preserving the target prevents blank pages after partial updates.
-    enum EpdDrawError recovered = epd_hl_update_screen_from_white(hl, MODE_GC16, 25);
+    enum EpdDrawError recovered;
+    if (s_complete_refresh_requested) {
+        s_main_fault = true;
+        recovered = update_display_full_unlocked(hl);
+    } else {
+        use_scan_for(&E0470_WAVEFORM, MODE_GC16);
+        if (!display_power_ready()) return;
+        epd_clear();
+        recovered = epd_hl_update_screen_from_white(hl, MODE_GC16, 25);
+    }
 
     s_main_fault = recovered != EPD_DRAW_SUCCESS;
 
@@ -920,7 +936,6 @@ enum EpdDrawError update_display_from_white(EpdiyHighlevelState* hl) {
 
 enum EpdDrawError update_display_white(EpdiyHighlevelState* hl) {
     bool held = display_present_begin();
-    s_full_refresh_requested = false;
     enum EpdDrawError result = update_display_white_unlocked(hl);
     display_present_end(held);
     return result;
@@ -953,7 +968,7 @@ enum EpdDrawError update_display_full(EpdiyHighlevelState* hl) {
 enum EpdDrawError display_panel_repair(EpdiyHighlevelState* hl) {
     if (!hl || !hl->front_fb || !hl->back_fb) return EPD_DRAW_INVALID_CROP;
     bool held = display_present_begin();
-    s_full_refresh_requested = false;
+    s_full_refresh_requested = s_complete_refresh_requested = false;
     display_main_transition_cancel();
     // 先真掉一次电：VCOM/VGH/VGL 重新建立，停在半路的像素失去保持电压。
     // One real power cycle first: VCOM/VGH/VGL are rebuilt and pixels stuck mid-frame lose their hold.
@@ -995,8 +1010,9 @@ enum EpdDrawError display_panel_repair(EpdiyHighlevelState* hl) {
 
 enum EpdDrawError update_display_image_gray(EpdiyHighlevelState* hl) {
     bool held = display_present_begin();
-    s_full_refresh_requested = false;
-    enum EpdDrawError result = update_display_image_gray_unlocked(hl);
+    enum EpdDrawError result = s_complete_refresh_requested
+        ? update_display_full_unlocked(hl) : update_display_image_gray_unlocked(hl);
+    if (result == EPD_DRAW_SUCCESS) s_full_refresh_requested = false;
     display_present_end(held);
     return result;
 }

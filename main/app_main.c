@@ -272,6 +272,9 @@ void app_main(void) {
         else app_font_activate_system();
     }
     rp_boot_mark("resume");
+    // 定时关机后的恢复也是解锁转场，首张目标页使用完整48相。
+    // Resume after timed power-off is also an unlock transition; use complete 48-phase GC16 for its first target frame.
+    if (resuming) display_request_full_refresh();
     app_loop_run(&(app_loop_config_t){
         .hl = &hl,
         .fb = framebuffer,

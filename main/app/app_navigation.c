@@ -64,6 +64,7 @@ static void app_navigation_switch_to(
     if (next->on_enter != NULL) next->on_enter(ctx);
     if (main_source && app_navigation_main_page_ready(ctx, next)) display_main_transition_arm(next, shelf_source, true);
     const bool reader_return = reader_source && app_navigation_main_page_ready(ctx, next);
+    if (reader_return) display_request_full_refresh();
     app_present(ctx, next, reader_return || next->enter_full ? APP_REDRAW_FULL : APP_REDRAW_PAGE);
     display_main_transition_disarm();
     ESP_LOGI(TAG, "page -> %s", next->title);
@@ -142,6 +143,7 @@ void app_navigation_apply_request(app_ctx_t *ctx, const app_desc_t **current,
             if (main_source && app_navigation_main_page_ready(ctx, *current))
                 display_main_transition_arm(*current, shelf_source, true);
             const bool reader_return = reader_source && app_navigation_main_page_ready(ctx, *current);
+            if (reader_return) display_request_full_refresh();
             app_present(ctx, *current, reader_return ? APP_REDRAW_FULL : APP_REDRAW_PAGE);
             display_main_transition_disarm();
         }

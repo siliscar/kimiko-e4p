@@ -24,7 +24,14 @@ reader_present_result_t reader_present_output(EpdiyHighlevelState *hl,
     // unchanged pixels that dilation brings along are not pushed through a white-black trip
     // that draws a thin outline.
     const unsigned frame_flags = request->image_page ? DISPLAY_REFRESH_IMAGE : DISPLAY_REFRESH_DEFAULT;
-    if (request->image_gray_refresh && request->refresh == READER_PRESENT_AREA && !request->cleanup && request->prior_reader) {
+    if (!request->reading && request->prior_reader &&
+        (request->refresh == READER_PRESENT_PAGE || request->refresh == READER_PRESENT_FULL)) {
+        // 同页退出正文回书架也请求完整48相，清掉阅读文字残影。
+        // Request complete 48-phase cleanup for body-to-shelf returns within this page.
+        display_request_full_refresh();
+        err = update_display_full(hl);
+    }
+    else if (request->image_gray_refresh && request->refresh == READER_PRESENT_AREA && !request->cleanup && request->prior_reader) {
         // 灰阶只驱动正文，避免每张插图都把整屏先清白再闪回。
         // Drive the grayscale body from the current frame instead of clearing the whole screen to white.
         err = request->water_effect
@@ -88,10 +95,6 @@ reader_present_result_t reader_present_output(EpdiyHighlevelState *hl,
              request->closing_panel_to_text) {
         err = display_refresh_area(hl, DISPLAY_REFRESH_RESTORE, request->screen_area, request->hold_gray ? DISPLAY_REFRESH_HOLD_GRAY : DISPLAY_REFRESH_DEFAULT);
     }
-    else if (!request->reading && request->prior_reader && request->refresh == READER_PRESENT_PAGE)
-        // 同页退出正文回书架也全刷，清掉阅读文字残影。
-        // Fully refresh body-to-shelf returns within this page to clear reading-text residue.
-        err = update_display_full(hl);
     else err = request->reading
         ? display_refresh_screen(hl, DISPLAY_REFRESH_READER_BODY, frame_flags |
             (request->page_mode == MODE_DU ? DISPLAY_REFRESH_QUICK : DISPLAY_REFRESH_DEFAULT))

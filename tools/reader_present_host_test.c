@@ -60,6 +60,7 @@ static call_t calls[16];
 static size_t count;
 static enum EpdDrawError errors[16];
 static size_t outputs;
+static bool complete_refresh_pending;
 static int tick;
 static uint8_t front[4] = {1, 2, 3, 4}, back[4] = {4, 3, 2, 1};
 static EpdiyHighlevelState hl = {.front_fb = front, .back_fb = back};
@@ -86,7 +87,13 @@ enum EpdDrawError update_display_with(EpdiyHighlevelState *s, const EpdWaveform 
 enum EpdDrawError update_display_mode_diff_with(EpdiyHighlevelState *s, const EpdWaveform *w, enum EpdDrawMode m) {
     return record(s, WHOLE_DIFF, w, m, none);
 }
-enum EpdDrawError update_display_full(EpdiyHighlevelState *s) { return record(s, FULL, NULL, 0, none); }
+void display_request_full_refresh(void) { complete_refresh_pending = true; }
+enum EpdDrawError update_display_full(EpdiyHighlevelState *s) {
+    enum EpdDrawError result = record(s, FULL, complete_refresh_pending ? &E0470_FULL_WAVEFORM : NULL,
+                                     complete_refresh_pending ? MODE_GC16 : 0, none);
+    if (result == EPD_DRAW_SUCCESS) complete_refresh_pending = false;
+    return result;
+}
 enum EpdDrawError update_display_fast_page(EpdiyHighlevelState *s) { return record(s, FAST, NULL, 0, none); }
 enum EpdDrawError update_display_water_turn(EpdiyHighlevelState *s, EpdRect a, e0470_turn_dir_t d) {
     return record(s, WATER, NULL, d, a);
@@ -236,9 +243,17 @@ int main(void) {
     r = reset(); r.refresh = READER_PRESENT_PAGE;
     reader_present_output(&hl, &r); expect(0, WHOLE_DIFF, &page, MODE_DU, none);
     r.reading = false; count = outputs = 0;
-    reader_present_output(&hl, &r); expect(0, FULL, NULL, 0, none);
+    reader_present_output(&hl, &r); assert(count == 1);
+    expect(0, FULL, &E0470_FULL_WAVEFORM, MODE_GC16, none);
     count = outputs = 0; errors[0] = EPD_DRAW_OTHER_ERROR;
     assert(reader_present_output(&hl, &r).error == EPD_DRAW_OTHER_ERROR);
+    assert(count == 1 && complete_refresh_pending);
+    count = outputs = 0; errors[0] = EPD_DRAW_SUCCESS;
+    assert(reader_present_output(&hl, &r).error == EPD_DRAW_SUCCESS && !complete_refresh_pending);
+    r.refresh = READER_PRESENT_FULL; count = outputs = 0;
+    reader_present_output(&hl, &r); assert(count == 1);
+    expect(0, FULL, &E0470_FULL_WAVEFORM, MODE_GC16, none);
+    r.refresh = READER_PRESENT_PAGE;
     count = outputs = 0; errors[0] = EPD_DRAW_SUCCESS; r.prior_reader = false;
     reader_present_output(&hl, &r); expect(0, FAST, NULL, 0, none);
     for (int du = 0; du < 2; ++du) {

@@ -18,6 +18,8 @@ static esp_err_t read_error;
 static char sequence[128];
 static unsigned sequence_size;
 static app_redraw_t last_redraw;
+static bool complete_refresh_pending;
+static unsigned complete_requests;
 static uint64_t trace = UINT64_C(1469598103934665603);
 
 static void record(uint64_t value) { trace = (trace ^ value) * UINT64_C(1099511628211); }
@@ -59,11 +61,18 @@ void display_main_transition_arm(const void *app, bool shelf, bool changed) {
     assert(app == current && changed); event(shelf ? 'S' : 'A');
 }
 void display_main_transition_disarm(void) { event('D'); }
+void display_request_full_refresh(void) {
+    assert(!complete_refresh_pending);
+    complete_refresh_pending = true;
+    ++complete_requests;
+}
 bool app_font_activate_system(void) { event('F'); return true; }
 void app_time_service_cancel(void) { event('T'); }
 void pico_ota_auto_cancel(void) {}
 void app_present(app_ctx_t *context, const app_desc_t *app, app_redraw_t redraw) {
     assert(context == &ctx && app == current); event('P'); record(redraw);
+    if (complete_refresh_pending) assert(redraw == APP_REDRAW_FULL);
+    complete_refresh_pending = false;
     last_redraw = redraw;
 }
 static void present_menu(app_ctx_t *context, const app_desc_t *app, int leaf, void *opaque) {
@@ -148,19 +157,21 @@ static void reader_returns(void) {
     for (unsigned i = 0; i < 4; ++i) {
         if (pages[i] == &app_book) continue;
         current = &app_book; body_visible = true;
+        unsigned requests_before = complete_requests;
         apply(pages[i], false, false);
-        assert(last_redraw == APP_REDRAW_FULL);
+        assert(last_redraw == APP_REDRAW_FULL && complete_requests == requests_before + 1);
         current = &app_book;
         history = (app_navigation_history_t){.return_app=pages[i]};
         apply(NULL, true, false);
-        assert(last_redraw == APP_REDRAW_FULL);
+        assert(last_redraw == APP_REDRAW_FULL && complete_requests == requests_before + 2);
     }
     body_visible = false; current = &home;
+    unsigned requests_before = complete_requests;
     apply(&settings, false, false);
-    assert(last_redraw == APP_REDRAW_PAGE);
+    assert(last_redraw == APP_REDRAW_PAGE && complete_requests == requests_before);
     current = &app_book; body_visible = true;
     apply(&app_transfer, false, false);
-    assert(last_redraw == APP_REDRAW_PAGE);
+    assert(last_redraw == APP_REDRAW_PAGE && complete_requests == requests_before);
 }
 
 static void contact_latches(void) {

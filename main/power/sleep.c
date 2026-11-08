@@ -779,10 +779,10 @@ void enter_lock_and_sleep(
     if (system_lock) app_font_end_lock(&lock_font);
     wifi_transfer_resume_after_sleep();
 
-    // 锁屏出图成功时面板和back都停在锁屏画面上：让当前页做一次整屏差分GC16，把叠加图擦回原页面即可。
+    // 锁屏出图成功时面板和back都停在锁屏画面上：让当前页做一次完整48相整屏全像素GC16，擦回原页面。
     // 不清白、不做78帧盲刷，面板不会先白一次再把锁屏图重画一遍；只有出图失败才回到原来的清白重建。
-    // After a successful lock the panel and back both hold the lock image: the page's full differential
-    // GC16 removes the overlay. No blind clear, so the panel is never whitened and the lock art is never
+    // After a successful lock the panel and back both hold the lock image: one complete 48-phase,
+    // full-pixel GC16 restores the page. No blind clear, so the panel is never whitened and the lock art is never
     // repainted. Only a failed lock present falls back to the original white rebuild.
     device_power_drain_events();
     const bool keep_panel = result == EPD_DRAW_SUCCESS;

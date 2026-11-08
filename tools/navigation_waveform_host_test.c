@@ -11,6 +11,10 @@
 
 int main(void) {
     e0470_waveform_init();
+    const EpdWaveformPhases* complete = e0470_waveform_phases(&E0470_FULL_WAVEFORM, MODE_GC16);
+    const EpdWaveformPhases* trimmed = e0470_waveform_phases(&E0470_WAVEFORM, MODE_GC16);
+    assert(complete && complete->phases == 48 && complete->phases == E0470_FULL_GC16_FRAMES);
+    assert(trimmed && trimmed->phases == E0470_GC16_FRAMES && trimmed->phases < complete->phases);
     const EpdWaveformPhases* short_table = e0470_waveform_phases(&E0470_FOLLOW_WAVEFORM, 1);
     const EpdWaveformPhases* gray_table = e0470_waveform_phases(&E0470_WAVEFORM, 5);
     assert(short_table && gray_table && short_table->phases == 8);

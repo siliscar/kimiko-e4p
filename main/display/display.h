@@ -53,7 +53,8 @@ bool display_present_begin(void);
 void display_present_end(bool held);
 
 
-/// 请求下一张完成绘制的画面整屏清理一次，用于解锁。/ Clean the next completed frame once after unlock.
+/// 解锁或阅读返回时，下一张完成绘制的画面使用完整48相GC16整屏全像素清理；成功才消费请求。
+/// Clean the next completed unlock/reader-return frame with complete 48-phase full-pixel GC16; consume only on success.
 void display_request_full_refresh(void);
 enum EpdDrawError update_display_mode(EpdiyHighlevelState* hl, enum EpdDrawMode mode);
 /// 普通页面切换使用真实差分 GL16；未变化像素不进入 dirty map。

@@ -221,7 +221,135 @@ static void session_layout_lifecycle(void) {
     drawn[0] = 0;
     puts("session layout: 100 cycles retain page offsets/text, reject other sessions, restore failed candidates and detach before chapter cleanup");
 }
+static void uniform_book_styles(void) {
+    const char *plain = "alpha\nbeta\ngamma";
+    const char *spaced = " \r\n\t\n\xE3\x80\x80\r\nalpha\r\n\r\n \t\r\nbeta\n\xC2\xA0\n\ngamma\r\n \n";
+    EpdRect rect = {20, 30, 100, 40};
+    uint8_t fb = 0;
+    book_layout_set_spacing(130, 25);
+    book_layout_set_first_line_indent(0);
+    book_layout_set_first_line_indent_adjust(0);
+    book_layout_set_typography(0);
+    book_layout_set_chapter_lead(0, 0);
+    book_layout_set_chapter_lead_width(0);
+    book_layout_set_images_visible(true);
+    book_layout_set_book_styles(false);
+    for (int vertical = 0; vertical < 2; ++vertical) {
+        book_layout_set_vertical(vertical != 0);
+        assert(book_layout_build(plain, strlen(plain), rect, 10));
+        size_t pages = book_layout_page_count();
+        char expected[128][512];
+        size_t expected_count = 0;
+        for (size_t page = 0; page < pages; ++page) {
+            drawn[0] = 0;
+            book_layout_draw_page(&fb, page, rect, 10);
+            strcpy(expected[expected_count++], drawn);
+        }
+        assert(book_layout_build(spaced, strlen(spaced), rect, 10));
+        assert(book_layout_page_count() == pages);
+        assert(book_layout_page_start_offset(0) == (size_t)(strstr(spaced, "alpha") - spaced));
+        for (size_t page = 0; page < pages; ++page) {
+            drawn[0] = 0;
+            book_layout_draw_page(&fb, page, rect, 10);
+            assert(!strcmp(drawn, expected[page]));
+            drawn[0] = 0;
+            book_layout_draw_cursor_t cursor = {0};
+            int result;
+            do { result = book_layout_draw_slice(&fb, page, rect, 10, &cursor); } while (!result);
+            assert(result == 1 && !strcmp(drawn, expected[page]));
+        }
+        book_layout_set_book_styles(true);
+        assert(book_layout_build(spaced, strlen(spaced), rect, 10));
+        assert(book_layout_page_count() > pages);
+        book_layout_set_book_styles(false);
+        // 空白章节仍有可绘制页；长段落的软折行不能被当作空白吞掉。
+        // Blank chapters keep a drawable page; soft wrapping must never consume paragraph text.
+        const char *empty = " \r\n\t\n　\n";
+        assert(book_layout_build(empty, strlen(empty), rect, 10));
+        assert(book_layout_page_count() == 1);
+        drawn[0] = 0; book_layout_draw_page(&fb, 0, rect, 10); assert(!drawn[0]);
+        const char *long_line = "alpha beta gamma delta epsilon zeta eta theta iota kappa";
+        assert(book_layout_build(long_line, strlen(long_line), rect, 10));
+        drawn[0] = 0;
+        for (size_t page = 0; page < book_layout_page_count(); ++page)
+            book_layout_draw_page(&fb, page, rect, 10);
+        assert(!strcmp(drawn, long_line));
+    }
+    book_layout_set_vertical(false);
+    const char *markup = "<h2>Title</h2><p style='text-align:right;margin-top:2em;margin-bottom:3em'>alpha</p>"
+                         "<p>&#160;</p><p><a href='#tail'>beta</a></p><p id='tail'>gamma</p>";
+    html_text_t chapter = {0};
+    assert(html_to_blocks(markup, strlen(markup), &chapter) == ESP_OK);
+    assert(chapter.count == 4 && chapter.blocks[1].align == 2);
+    size_t original_len = chapter.len;
+    blk_t original_block = chapter.blocks[1];
+    rect = (EpdRect){20, 30, 300, 400};
+    capture_lines = true; captured_count = 0; drawn[0] = 0;
+    assert(book_layout_build_blocks(chapter.utf8, chapter.len, chapter.blocks, chapter.count, rect, 10));
+    book_layout_set_links(chapter.links, chapter.link_count);
+    book_layout_draw_page(&fb, 0, rect, 10);
+    assert(captured_count == 4 && first_draw_px == 18 && last_draw_px == 10);
+    assert(!strcmp(captured[0], "Title") && !strcmp(captured[1], "alpha") && !strcmp(captured[2], "beta"));
+    assert(captured_y[2] - captured_y[1] == 16 && captured_y[3] - captured_y[2] == 16);
+    assert(last_draw_x == rect.x && book_layout_link_at(0, rect.x + 5, captured_y[2] - 5) == 0);
+    assert(chapter.len == original_len && !memcmp(&original_block, &chapter.blocks[1], sizeof(original_block)));
+    book_layout_set_spacing(200, 100);
+    assert(book_layout_build_blocks(chapter.utf8, chapter.len, chapter.blocks, chapter.count, rect, 10));
+    captured_count = 0; drawn[0] = 0; book_layout_draw_page(&fb, 0, rect, 10);
+    assert(captured_y[2] - captured_y[1] == 40 && captured_y[3] - captured_y[2] == 40);
+    book_layout_set_spacing(130, 25);
+    book_layout_free(); book_layout_set_links(NULL, 0); html_text_free(&chapter);
+    // 统一模式保留手动换行、图片及原位置；独立的隐藏图片偏好仍有效。
+    // Uniform mode retains explicit breaks, images and offsets; hiding images remains independent.
+    const char *illustrated = "<p>alpha<br/>beta</p><p>　</p><img src='picture.png'/><p>gamma</p>";
+    assert(html_to_blocks(illustrated, strlen(illustrated), &chapter) == ESP_OK);
+    assert(chapter.image_count == 1 && chapter.blocks[0].line_break_after);
+    for (size_t i = 0; i < chapter.count; ++i) if (chapter.blocks[i].image >= 0) {
+        chapter.blocks[i].image_width = 60; chapter.blocks[i].image_height = 15;
+    }
+    book_layout_set_image_dims(fixture_image, &chapter);
+    for (int vertical = 0; vertical < 2; ++vertical) for (int hidden = 0; hidden < 2; ++hidden) {
+        book_layout_set_vertical(vertical != 0);
+        book_layout_set_images_visible(!hidden);
+        assert(book_layout_build_blocks(chapter.utf8, chapter.len, chapter.blocks, chapter.count, rect, 10));
+        drawn[0] = 0; captured_count = 0;
+        int images = 0;
+        for (size_t page = 0; page < book_layout_page_count(); ++page) {
+            images += book_layout_page_image_count(page);
+            book_layout_draw_page(&fb, page, rect, 10);
+        }
+        assert(images == (hidden ? 0 : 1) && !strcmp(drawn, "alphabetagamma"));
+        if (!vertical) assert(captured_y[1] - captured_y[0] == 13);
+    }
+    book_layout_free(); book_layout_set_image_dims(NULL, NULL); html_text_free(&chapter);
+    book_layout_set_vertical(false); book_layout_set_images_visible(true);
+    // 相同字体段在统一模式下回到阅读字体；重新开启无需重新解析原书。
+    // The same font spans use the reader face in uniform mode; re-enabling needs no source reparse.
+    const char *text = "alpha";
+    blk_t block = {.len = 5, .image = -1, .align = 2, .run_count = 1};
+    html_run_t run = {.len = 5, .slot = 1};
+    test_slot_ready_mask |= 2u; test_slot_advance[1] = 10;
+    size_t original_pages = 0;
+    for (int original = 0; original < 2; ++original) {
+        book_layout_set_book_styles(original != 0);
+        book_layout_set_runs(&run, 1);
+        // 排版前发布 run 表。/ Publish runs before measurement.
+        assert(book_layout_build_blocks(text, 5, &block, 1, (EpdRect){20,30,60,13}, 10));
+        if (!original) { original_pages = book_layout_page_count(); assert(original_pages == 1); }
+        else assert(book_layout_page_count() > original_pages);
+        book_layout_free();
+    }
+    book_layout_set_runs(NULL, 0);
+    test_slot_advance[1] = 0; test_slot_ready_mask = 1u;
+    capture_lines = false;
+    book_layout_set_book_styles(true);
+    book_layout_set_spacing(150, 50);
+    book_layout_set_first_line_indent(2);
+    drawn[0] = 0;
+}
+
 int main(void) {
+    uniform_book_styles();
     session_layout_lifecycle();
     const char *size_text="甲乙丙丁戊己庚辛壬癸。天地玄黄宇宙洪荒。";
     for(int px=18;px<=90;++px){

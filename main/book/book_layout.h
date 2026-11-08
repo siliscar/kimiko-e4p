@@ -51,6 +51,9 @@ void book_layout_set_reading_line(unsigned style);
 void book_layout_set_reading_line_offset(int offset_px);
 /// 关闭插图时，排版跳过图片块，不为其保留页或正文空位。/ When false, omit image blocks without reserving pages or body space.
 void book_layout_set_images_visible(bool visible);
+/// 默认保留书内样式；关闭时忽略字体段、对齐及段边距，并跳过空白行；保留标题、插图、链接与源偏移。重排前调用。
+/// Keep book styles by default; off ignores font runs, alignment, block margins and blank lines, retaining headings, images, links and source offsets. Call before rebuilding.
+void book_layout_set_book_styles(bool enabled);
 /// 竖排：正文自上而下成列、列序自右向左，标点按竖排禁则处理，拉丁与括号转 90°，插图独占一页。
 /// 关闭时是原来的横排，排版与绘制一字未变；重排前调用。
 /// Vertical setting: body runs down in columns ordered right to left, punctuation follows the

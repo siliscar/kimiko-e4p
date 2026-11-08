@@ -44,10 +44,11 @@ bool reader_reflow_typography(const reader_reflow_t *reflow, int tracking_index)
 /// Callers first confirm content exists; failed indentation writes no settings and never implicitly corrects position.
 bool reader_reflow_indent(const reader_reflow_t *reflow, int em, int adjustment);
 
-/// 调用方已校验正文和 kind（0状态栏、1隐藏图片、2竖排），并按原顺序获取锁、读取锚点、交还预绘。
-/// Caller validates content and kind (0 status bar, 1 hidden images, 2 vertical), then locks, captures the anchor and hands prefetch back in that order.
+/// 调用方已校验正文和 kind（0状态栏、1隐藏图片、2竖排、3书内样式），并按原顺序获取锁、读取锚点、交还预绘。
+/// Caller validates content and kind (0 status bar, 1 hidden images, 2 vertical, 3 book styles), then locks, captures the anchor and hands prefetch back in that order.
 /// 锁内写设置并重排；失败恢复旧设置和布局；调用方负责解锁、提示及成功后的图片与进度处理。
 /// Write settings and reflow under the held lock; restore old settings/layout on failure. Caller unlocks, reports failure and handles images/progress on success.
+/// 书内样式先构建后保存，保存失败也恢复原布局。/ Book styles persist only after rebuilding and restore the layout on write failure too.
 bool reader_reflow_option_locked(const reader_reflow_t *reflow, int kind, bool previous, size_t offset);
 
 typedef enum {

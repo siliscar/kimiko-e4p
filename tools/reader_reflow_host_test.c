@@ -18,6 +18,7 @@ static size_t span;
 static bool locked, handed_back;
 static unsigned begins, ends, leads, builds, maps, writes, saves, failures;
 static bool statusbar, hide_images, vertical, images_visible, layout_vertical, fullscreen, mode_test;
+static bool book_styles, layout_styles, style_write_fails;
 
 static void require_layout_access(void) { assert(locked && handed_back); }
 static void begin(void) { assert(!locked && !handed_back); locked = handed_back = true; ++begins; }
@@ -29,7 +30,7 @@ static bool build(void) {
     require_layout_access(); ++builds;
     if (failures) { --failures; span = 0; return false; }
     span = (size_t)(px * 2 + layout_tracking + layout_indent * 10 + layout_adjustment);
-    if (mode_test) span += statusbar * 10 + hide_images * 20 + vertical * 30 + fullscreen * 40;
+    if (mode_test) span += statusbar * 10 + hide_images * 20 + vertical * 30 + fullscreen * 40 + layout_styles * 50;
     return true;
 }
 static const reader_reflow_t reflow = {
@@ -70,6 +71,13 @@ void app_settings_set_reader_hide_images(bool value) { require_layout_access(); 
 void app_settings_set_book_vertical(bool value) { require_layout_access(); ++writes; vertical = value; }
 void book_layout_set_images_visible(bool value) { require_layout_access(); assert(value == !hide_images); images_visible = value; }
 void book_layout_set_vertical(bool value) { require_layout_access(); assert(value == vertical); layout_vertical = value; }
+void book_layout_set_book_styles(bool value) { require_layout_access(); layout_styles = value; }
+bool app_settings_set_book_styles(bool value) {
+    require_layout_access(); assert(builds == 1); ++writes;
+    if (style_write_fails) return false;
+    book_styles = value;
+    return true;
+}
 
 static void reset(void) {
     position = (reader_position_t){7, 2};
@@ -82,6 +90,7 @@ static void reset(void) {
     begins = ends = leads = builds = maps = writes = saves = failures = 0;
     statusbar = images_visible = true;
     hide_images = vertical = layout_vertical = fullscreen = mode_test = false;
+    book_styles = layout_styles = true; style_write_fails = false;
 }
 
 int main(void) {
@@ -157,6 +166,27 @@ int main(void) {
             assert(maps == (fail ? 0u : 1u) && (span == 0) == (fail == 2));
             end();
         }
+    for (int previous = 0; previous < 2; ++previous) for (unsigned fail = 0; fail <= 2; ++fail) {
+        reset(); mode_test = true;
+        book_styles = layout_styles = previous;
+        failures = fail;
+        size_t offset = book_layout_page_start_offset(position.page);
+        begin();
+        assert(reader_reflow_option_locked(&reflow, 3, previous, offset) == !fail);
+        assert(book_styles == (fail ? previous : !previous) && layout_styles == book_styles);
+        assert(writes == (fail ? 0u : 1u) && builds == (fail ? 2u : 1u));
+        assert(position.page == (fail ? 2u : offset / span));
+        assert((span == 0) == (fail == 2));
+        end();
+        reset(); mode_test = style_write_fails = true;
+        book_styles = layout_styles = previous;
+        offset = book_layout_page_start_offset(position.page);
+        begin();
+        assert(!reader_reflow_option_locked(&reflow, 3, previous, offset));
+        assert(book_styles == previous && layout_styles == previous && builds == 2 && writes == 1);
+        assert(position.page == 2 && !maps);
+        end();
+    }
     for (int previous = 0; previous < 2; ++previous) for (unsigned fail = 0; fail <= 2; ++fail) {
         reset(); mode_test = true; fullscreen = previous; failures = fail;
         reader_reflow_result_t expected = fail == 0 ? READER_REFLOW_APPLIED :

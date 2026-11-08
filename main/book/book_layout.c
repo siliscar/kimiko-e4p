@@ -37,6 +37,7 @@ static int s_first_line_indent_adjust_px;
 static unsigned s_reading_line;
 static int s_reading_line_offset;
 static bool s_images_visible = true;
+static bool s_book_styles = true;
 // 竖排：同一套折行与禁则逻辑，只是推进方向朝下、堆叠方向朝左。
 // Vertical setting: the same wrapping and kinsoku logic, with the advance running down and the
 // stack running leftward.
@@ -190,7 +191,7 @@ int book_layout_link_at(size_t page, int x, int y) {
 // Which face owns this byte. Without a run table everything is the system face and the
 // layout behaves exactly as before.
 static uint8_t slot_at(size_t off) {
-    if (s_runs == NULL) return TTF_FONT_SLOT_SYSTEM;
+    if (!s_book_styles || s_runs == NULL) return TTF_FONT_SLOT_SYSTEM;
     const blk_t* block = block_at(off);
     if (block == NULL || block->run_count == 0 || off < block->offset) return TTF_FONT_SLOT_SYSTEM;
     size_t rel = off - block->offset;
@@ -238,7 +239,7 @@ static void line_run_push(size_t offset, uint8_t slot) {
 // this line only.
 static void line_runs_build(const blk_t* block, size_t visible_off, size_t line_end) {
     s_line_run_count = 0;
-    if (s_runs == NULL || block == NULL || block->run_count == 0) return;
+    if (!s_book_styles || s_runs == NULL || block == NULL || block->run_count == 0) return;
     size_t block_end = block->offset + block->len;
     if (visible_off < block->offset || line_end > block_end || line_end <= visible_off) return;
     size_t base = visible_off - block->offset, stop = line_end - block->offset;
@@ -365,10 +366,33 @@ static bool image_spacing_block(const blk_t* block) {
     return true;
 }
 
-// 只跳过插图相邻的空白块，保留原文字节位置、正文段落与 TXT 的手动空行。
-// Skip only image-adjacent spacer blocks; keep source offsets, text paragraphs and manual TXT blank lines.
+static size_t visible_start(size_t off, size_t limit);
+
+// 统一排版跳过完整空白行，保留原文与段落起点，不能吞掉软折行后的内容。
+// Uniform layout skips whole blank lines while retaining source offsets and soft-wrapped content.
+static size_t skip_blank_lines(size_t off) {
+    while (off < s_len) {
+        const blk_t *block = block_at(off);
+        if (block && block->image >= 0) break;
+        if (off && s_text[off - 1] != '\n' && s_text[off - 1] != '\r' &&
+            (!block || off != block->offset)) break;
+        size_t limit = block ? block->offset + block->len : s_len;
+        size_t visible = visible_start(off, limit);
+        if (visible < limit && s_text[visible] != '\r' && s_text[visible] != '\n') break;
+        off = visible;
+        if (off < s_len && s_text[off] == '\r') ++off;
+        if (off < s_len && s_text[off] == '\n') ++off;
+    }
+    return off;
+}
+
+// 保留原文字节位置；原书模式只跳过插图相邻留白，统一模式还跳过文本空行。
+// Preserve source offsets; original style skips image spacers, uniform style also skips blank text lines.
 static size_t skip_image_spacing(size_t off) {
-    while (off < s_len && s_block_count) {
+    while (off < s_len) {
+        size_t visible = s_book_styles ? off : skip_blank_lines(off);
+        if (visible != off) { off = visible; continue; }
+        if (!s_block_count) break;
         const blk_t* block = block_at(off);
         if (block->offset != off) break;
         size_t end = block->offset + block->len;
@@ -460,6 +484,7 @@ void book_layout_set_reading_line_offset(int offset_px) {
     s_reading_line_offset = offset_px < -8 ? -8 : offset_px > 8 ? 8 : offset_px;
 }
 void book_layout_set_images_visible(bool visible) { s_images_visible = visible; }
+void book_layout_set_book_styles(bool enabled) { s_book_styles = enabled; }
 void book_layout_set_vertical(bool vertical) { s_vertical = vertical; }
 bool book_layout_vertical(void) { return s_vertical; }
 void book_layout_set_chapter_lead_width(unsigned width_px) { s_chapter_lead_width = width_px; }
@@ -647,9 +672,9 @@ static bool take_line(size_t off, int advance_limit, int hang_margin, size_t* ne
     *px = s_px + (*heading ? 8 : 0);
     bool first_line = block ? off == block->offset :
         off == 0 || s_text[off - 1] == '\n' || s_text[off - 1] == '\r';
-    *align = block ? block->align : 0;
-    // 首行缩进由阅读设置统一控制；书内标题和对齐块仍保持原本的位置。
-    // The reader setting controls paragraph indent; headings and aligned blocks keep their placement.
+    *align = s_book_styles && block ? block->align : 0;
+    // 首行缩进由阅读设置控制；标题不缩进，仅在保留书内样式时沿用段落对齐。
+    // The reader setting owns indent; headings stay unindented and block alignment applies only with book styles.
     *indent = 0;
     if (first_line && !*heading && !*align) {
         // 缩进按当前字体真实全角字宽和字间距计算，不把行高当字宽。
@@ -667,8 +692,8 @@ static bool take_line(size_t off, int advance_limit, int hang_margin, size_t* ne
     }
     if (*indent >= advance_limit) *indent = advance_limit > 1 ? advance_limit - 1 : 0;
     if (*indent + *px > advance_limit) *indent = 0;
-    *margin_before = first_line && block ? (int)((unsigned)*px * block->margin_before_percent / 100) : 0;
-    *margin_after = block ? (int)((unsigned)*px * block->margin_after_percent / 100) : 0;
+    *margin_before = s_book_styles && first_line && block ? (int)((unsigned)*px * block->margin_before_percent / 100) : 0;
+    *margin_after = s_book_styles && block ? (int)((unsigned)*px * block->margin_after_percent / 100) : 0;
     size_t limit = block ? block->offset + block->len : s_len;
     // 纸书常把全角空格写进段首；统一由阅读设置决定缩进，原文偏移仍保留。
     // Printed-book source often contains leading spaces; the reader setting owns the visual indent.

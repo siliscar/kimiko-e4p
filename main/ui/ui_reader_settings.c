@@ -16,17 +16,16 @@ static int settings_extra(unsigned scale, int maximum) {
 }
 
 int ui_reader_settings_top(unsigned system_font_size) {
-    return 580 - settings_extra(system_font_size, 204);
+    return 476 - settings_extra(system_font_size, 260);
 }
 
 EpdRect ui_reader_settings_rect(unsigned system_font_size, int index) {
     int extra=settings_extra(system_font_size,56), footer=settings_extra(system_font_size,36);
-    if (index < 0 || index >= 8) return (EpdRect){0, 0, 0, 0};
+    if (index < 0 || index >= 9) return (EpdRect){0, 0, 0, 0};
     int row=index/2;
-    // 八项排成四行双列：页眉页脚恰好补齐第四行右格，行距 104，四行底部仍留在「完成」之上。
-    // Eight items fill four two-column rows: the chrome entry completes the fourth row's right
-    // cell; a 104 pitch keeps every row clear of Done.
-    return (EpdRect){36+(index%2)*314,702+row*104-(3-row)*extra-footer,298,98+extra};
+    // 前八项双列，书内样式单独通栏；向上扩展一行以保留字号适配和完成键间距。
+    // Eight paired cells plus a full-width style toggle; extend upward for scaled text and Done clearance.
+    return (EpdRect){36+(index%2)*314,598+row*104-(4-row)*extra-footer,index==8?612:298,98+extra};
 }
 
 void ui_reader_settings_switch(uint8_t *fb, EpdRect track, bool on) {
@@ -85,6 +84,7 @@ void ui_reader_settings_draw(uint8_t *fb, const ui_reader_settings_values_t *val
     draw_reading_toggle(fb, values->system_font_size, 5, "关闭书内图片", "跳过正文插图，保留原书文件", values->hide_images);
     draw_reading_toggle(fb, values->system_font_size, 6, "竖排（从右到左）", NULL, values->vertical_text);
     draw_reading_card(fb, values->system_font_size, 7, "页眉页脚", "自定义内容", false);
+    draw_reading_toggle(fb, values->system_font_size, 8, "书内样式", "关闭后使用统一排版", values->book_styles);
     ui_fill_round_rect(fb, (EpdRect){36, 1141, 612, 58}, 20, UI_GRAY_BLACK);
     draw_centered_label(fb, 342, 1170, 26, "完成", true);
 }

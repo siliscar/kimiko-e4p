@@ -358,6 +358,11 @@ uint8_t app_settings_book_paragraph_value(uint8_t level);
 uint8_t app_settings_book_paragraph_level(uint8_t percent);
 uint8_t app_settings_book_paragraph_spacing(void);
 void app_settings_set_book_paragraph_spacing(uint8_t percent);
+/// 书内样式默认开启；关闭后正文由阅读设置统一排版并忽略空白行，保留标题和图片。
+/// Book styles default on; off uses reader typography and skips blank lines, retaining headings and images.
+bool app_settings_book_styles(void);
+/// 保存失败返回 false，内存不变。/ Failed persistence returns false without changing memory.
+bool app_settings_set_book_styles(bool enabled);
 /// 书架样式：1 深色书轨、2 亚克力、5 列表；旧3/4安全回退2。/ Shelf styles: rail (1), acrylic (2), list (5); retired IDs 3/4 fall back to 2.
 uint8_t app_settings_shelf_style(void);
 void app_settings_set_shelf_style(uint8_t style);

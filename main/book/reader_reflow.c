@@ -120,14 +120,18 @@ static void reader_reflow_set_option(int kind, bool value) {
 }
 
 bool reader_reflow_option_locked(const reader_reflow_t *reflow, int kind, bool previous, size_t offset) {
-    reader_reflow_set_option(kind, !previous);
+    if (kind < 0 || kind > 3) return false;
+    if (kind == 3) book_layout_set_book_styles(!previous);
+    else reader_reflow_set_option(kind, !previous);
     // 模式改变正文区域或题头轴向，先重算题头再构建布局。
     // A mode changes the body area or heading axis, so refresh the heading before building.
     reflow->refresh_lead();
     bool ok = reflow->build();
+    if (ok && kind == 3) ok = app_settings_set_book_styles(!previous);
     if (ok) reflow->position->page = book_layout_page_for_offset(offset);
     else {
-        reader_reflow_set_option(kind, previous);
+        if (kind == 3) book_layout_set_book_styles(previous);
+        else reader_reflow_set_option(kind, previous);
         reflow->refresh_lead();
         (void)reflow->build();
     }

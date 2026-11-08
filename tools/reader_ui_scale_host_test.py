@@ -82,6 +82,7 @@ static void copy_text(char *to,size_t cap,const char *from){snprintf(to,cap,"%s"
 static int app_settings_book_weight_fine(void){return 2;}
 #define APP_BOOK_WEIGHT_FINE_MAX 32
 static bool app_settings_book_vertical(void){return true;}
+static bool app_settings_book_styles(void){return true;}
 static bool app_settings_book_fonts(void){return true;}
 static bool app_settings_book_antialias(void){return true;}
 static unsigned app_settings_book_reading_line(void){return 2;}
@@ -139,7 +140,7 @@ int main(void){uint8_t fb[1]={0};
    draw_font_settings(fb);assert(!antialias&&selected_slot==2);draw_reading_settings(fb);
    for(int i=0;i<6;++i){EpdRect a=reader_font_card(i);assert(a.y>=reader_font_top()+100&&a.y+a.height<1141);for(int j=0;j<i;++j)assert(!overlap(a,reader_font_card(j)));}
    EpdRect slider=reader_slider_rect(0);assert(slider.y>reader_font_top()+100&&slider.y+slider.height<reader_font_card(0).y);
-   for(int i=0;i<7;++i){EpdRect a=reading_setting_rect(i);assert(a.y>=reading_settings_top()+100&&a.y+a.height<1141);for(int j=0;j<i;++j)assert(!overlap(a,reading_setting_rect(j)));}
+   for(int i=0;i<9;++i){EpdRect a=reading_setting_rect(i);assert(a.y>=reading_settings_top()+100&&a.y+a.height<1141);for(int j=0;j<i;++j)assert(!overlap(a,reading_setting_rect(j)));}
    for(int i=0;i<9;++i){EpdRect a=reader_font_pick_rect(i);assert(a.y>reader_font_picker_top()+120&&a.y+a.height<1141);for(int j=0;j<i;++j)assert(!overlap(a,reader_font_pick_rect(j)));}
    for(int edit=0;edit<2;++edit){s_bookmark_edit=edit;assert(bookmark_rows()>=3);for(int row=0;row<bookmark_rows();++row){EpdRect a=bookmark_row_rect(row);assert(a.y+a.height<=560+(edit?520:600));if(row)assert(!overlap(a,bookmark_row_rect(row-1)));}}
  }

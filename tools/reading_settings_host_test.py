@@ -19,7 +19,7 @@ typedef struct {int x,y,width,height;} EpdRect;
 typedef struct {unsigned chapter,page,offset;} app_ctx_t;
 typedef enum {APP_REDRAW_NONE,APP_REDRAW_PAGE,APP_REDRAW_FULL} app_redraw_t;
 enum {READER_PANEL_NONE,READER_PANEL_REFRESH_SETTINGS,READER_PANEL_TURN_SETTINGS,READER_PANEL_KEY_SETTINGS,READER_PANEL_CHROME_SETTINGS};
-static int s_reader_panel, s_turns, invalidates, toggles[3], full_pages = 10, effect;
+static int s_reader_panel, s_turns, invalidates, toggles[4], full_pages = 10, effect;
 static int s_key_scroll,s_chrome_scroll;
 static bool s_key_drag,s_chrome_drag;
 static char s_chrome_error[64];
@@ -28,7 +28,7 @@ static unsigned app_settings_reader_full_pages(void){return full_pages;}
 static void app_settings_set_reader_full_pages(unsigned n){full_pages=n;}
 static unsigned app_settings_reader_turn_effect(void){return effect;}
 static void app_settings_set_reader_turn_effect(unsigned n){effect=n;}
-static app_redraw_t apply_reader_option(app_ctx_t *ctx,int i){(void)ctx;assert(i>=0&&i<3);++toggles[i];return APP_REDRAW_PAGE;}
+static app_redraw_t apply_reader_option(app_ctx_t *ctx,int i){(void)ctx;assert(i>=0&&i<4);++toggles[i];return APP_REDRAW_PAGE;}
 static void invalidate_prep(void){++invalidates;}
 '''
 source = ROOT/'main/apps/app_book.c'
@@ -39,10 +39,10 @@ for name in ('reading_settings_top', 'reading_setting_rect', 'reading_settings_a
 unit += r'''
 int main(void){
     app_ctx_t ctx={2,3,1234};
-    // 八个控件共用命中矩形且不重叠。/ Eight controls share nonoverlapping hit rectangles.
-    for(int i=0;i<8;++i){
+    // 九个控件共用命中矩形且不重叠。/ Nine controls share nonoverlapping hit rectangles.
+    for(int i=0;i<9;++i){
         EpdRect a=reading_setting_rect(i);assert(a.x>=36&&a.x+a.width<=648&&a.y>=reading_settings_top()+100&&a.y+a.height<1141);
-        for(int j=i+1;j<8;++j){EpdRect b=reading_setting_rect(j);assert(a.x+a.width<=b.x||b.x+b.width<=a.x||a.y+a.height<=b.y||b.y+b.height<=a.y);}
+        for(int j=i+1;j<9;++j){EpdRect b=reading_setting_rect(j);assert(a.x+a.width<=b.x||b.x+b.width<=a.x||a.y+a.height<=b.y||b.y+b.height<=a.y);}
     }
     EpdRect mode=reading_setting_rect(2),keys=reading_setting_rect(3);
     assert(keys.x==mode.x+314&&keys.y==mode.y);
@@ -59,6 +59,9 @@ int main(void){
     reading_settings_action(&ctx,chrome.x,chrome.y);
     assert(s_reader_panel==READER_PANEL_CHROME_SETTINGS&&!s_chrome_scroll&&!s_chrome_drag&&!s_chrome_error[0]);
     for(int i=0;i<3;++i){EpdRect a=reading_setting_rect(4+i);assert(reading_settings_action(&ctx,a.x+a.width-5,a.y+a.height-5)==APP_REDRAW_PAGE&&toggles[i]==1);}
+    EpdRect styles=reading_setting_rect(8);
+    assert(styles.width==612);
+    assert(reading_settings_action(&ctx,styles.x+styles.width-1,styles.y+styles.height-1)==APP_REDRAW_PAGE&&toggles[3]==1);
     s_reader_panel=READER_PANEL_REFRESH_SETTINGS;int before=invalidates;
     assert(reading_settings_action(&ctx,342,interval.y+10)==APP_REDRAW_NONE);
     assert(reading_settings_action(&ctx,120,interval.y+interval.height)==APP_REDRAW_NONE);
@@ -67,7 +70,7 @@ int main(void){
     reading_settings_action(&ctx,342,1170);assert(s_reader_panel==READER_PANEL_NONE);
     s_reader_panel=READER_PANEL_REFRESH_SETTINGS;
     reading_settings_action(&ctx,342,reading_settings_top()-1);assert(s_reader_panel==READER_PANEL_NONE);
-    for(scale=100;scale<=200;++scale)for(int i=0;i<8;++i){
+    for(scale=100;scale<=200;++scale)for(int i=0;i<9;++i){
         EpdRect a=reading_setting_rect(i);
         assert(a.y>=reading_settings_top()+100&&a.y+a.height<1141);
         for(int j=0;j<i;++j){EpdRect b=reading_setting_rect(j);assert(a.x+a.width<=b.x||b.x+b.width<=a.x||a.y+a.height<=b.y||b.y+b.height<=a.y);}
@@ -85,7 +88,7 @@ int main(void){
         assert(reading_settings_action(&ctx,a.x,a.y+a.height)==APP_REDRAW_NONE);
         assert(invalidates==previous&&s_reader_panel==READER_PANEL_REFRESH_SETTINGS);
     }
-    puts("PASS: 100-200% eight-setting geometry, cycles, secondary pages, Done and inert gaps");
+    puts("PASS: 100-200% nine-setting geometry, cycles, secondary pages, Done and inert gaps");
 }
 '''
 with tempfile.TemporaryDirectory(dir=ROOT/'build') as folder:

@@ -2360,6 +2360,7 @@ static void draw_reading_settings(uint8_t* fb) {
         .statusbar = app_settings_reader_statusbar(),
         .hide_images = app_settings_reader_hide_images(),
         .vertical_text = app_settings_book_vertical(),
+        .book_styles = app_settings_book_styles(),
     };
     ui_reader_settings_draw(fb, &values);
 }
@@ -5460,9 +5461,10 @@ static app_redraw_t reader_manual_refresh(app_ctx_t* ctx) {
 
 static app_redraw_t apply_reader_option(app_ctx_t* ctx, int kind) {
     (void)ctx;
-    if (!s_text || kind < 0 || kind > 2) return APP_REDRAW_NONE;
+    if (!s_text || kind < 0 || kind > 3) return APP_REDRAW_NONE;
     bool previous = kind == 0 ? app_settings_reader_statusbar() :
-                    kind == 1 ? app_settings_reader_hide_images() : app_settings_book_vertical();
+                    kind == 1 ? app_settings_reader_hide_images() :
+                    kind == 2 ? app_settings_book_vertical() : app_settings_book_styles();
     // 重新开启插图时，先补齐尺寸；文件读取必须在绘制锁外。
     // Probe missing dimensions before re-enabling images, outside the drawing lock.
     if (kind == 1 && previous) for (size_t i = 0; i < s_block_count; ++i) {
@@ -5740,6 +5742,8 @@ static app_redraw_t reading_settings_action(app_ctx_t *ctx, uint16_t x, uint16_t
         s_chrome_scroll = 0;
         s_chrome_drag = false;
         s_chrome_error[0] = 0;
+    } else if (ui_rect_hit(reading_setting_rect(8), x, y)) {
+        return apply_reader_option(ctx, 3);
     } else {
         for (int i = 0; i < 3; ++i)
             if (ui_rect_hit(reading_setting_rect(4 + i), x, y)) return apply_reader_option(ctx, i);
@@ -6655,6 +6659,7 @@ static void on_enter(app_ctx_t* ctx) {
     while (ble_pt_pop_key(&old_key)) {}
     while (ble_pt_pop_raw(&old_raw)) {}
     book_layout_set_spacing(app_settings_book_line_spacing(), app_settings_book_paragraph_spacing());
+    book_layout_set_book_styles(app_settings_book_styles());
     book_layout_set_images_visible(!app_settings_reader_hide_images());
     // 插图通栏：无背景时整屏宽是面板常量，进入阅读页说一次，之后每次重排都沿用同一条带。
     // 有阅读背景时不开通栏：背景内框靠用户调边距对齐，插图必须跟着正文栏，否则会压到框上。

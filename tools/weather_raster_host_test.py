@@ -131,9 +131,11 @@ unit += r"""
 #include "weather_test_data.h"
 static void previews(uint8_t *f,const char *directory){
     app_weather_view_t view={.has_city=true,.has_forecast=true,.state=APP_WEATHER_READY};
-    assert(weather_location_parse(WEATHER_TEST_CITY,strlen(WEATHER_TEST_CITY),&view.city));
+    weather_location_t hits[1];unsigned hit_count=0;
+    assert(weather_om_locations_parse(WEATHER_TEST_GEOCODING_ONE,strlen(WEATHER_TEST_GEOCODING_ONE),hits,1,&hit_count)&&hit_count==1);
+    view.city=hits[0];
     int64_t fixture_now=weather_timestamp("2026-11-02T00:30:00Z");
-    assert(weather_forecast_parse(WEATHER_TEST_FORECAST,strlen(WEATHER_TEST_FORECAST),fixture_now,&view.city,&view.forecast));
+    assert(weather_om_forecast_parse(WEATHER_TEST_FORECAST,strlen(WEATHER_TEST_FORECAST),fixture_now,&view.city,&view.forecast));
     strcpy(view.city.id,"101090101");strcpy(view.city.name,"石家庄");
     strcpy(view.city.admin1,"河北省");strcpy(view.city.admin2,"石家庄");
     view.city.lat=38.0428;view.city.lon=114.5149;view.forecast.location=view.city;
@@ -214,8 +216,10 @@ int main(int argc,char **argv){
     uint8_t *f=malloc(684*1216/2),*before=malloc(684*1216/2);assert(f&&before);
     app_weather_view_t view={.has_city=true,.has_forecast=true};
     int64_t now=weather_timestamp("2026-11-02T00:30:00Z");
-    assert(weather_location_parse(WEATHER_TEST_CITY,strlen(WEATHER_TEST_CITY),&view.city));
-    assert(weather_forecast_parse(WEATHER_TEST_FORECAST,strlen(WEATHER_TEST_FORECAST),now,&view.city,&view.forecast));
+    weather_location_t hits[1];unsigned hit_count=0;
+    assert(weather_om_locations_parse(WEATHER_TEST_GEOCODING_ONE,strlen(WEATHER_TEST_GEOCODING_ONE),hits,1,&hit_count)&&hit_count==1);
+    view.city=hits[0];
+    assert(weather_om_forecast_parse(WEATHER_TEST_FORECAST,strlen(WEATHER_TEST_FORECAST),now,&view.city,&view.forecast));
     size_t old=live;assert(ui_weather_prepare()&&live-old==684u*472u/2u);
     assert(ui_weather_prepare()&&live-old==684u*472u/2u);
     equivalent_halo(f,before);

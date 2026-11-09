@@ -68,11 +68,6 @@ static bool integer(cJSON *root, const char *key, int low, int high, int *out) {
     if (!number(root, key, low, high, &n) || floor(n) != n) return false;
     *out = (int)n; return true;
 }
-static bool boolean(cJSON *root, const char *key, bool *out) {
-    cJSON *v = cJSON_GetObjectItemCaseSensitive(root, key);
-    if (!cJSON_IsBool(v)) return false;
-    *out = cJSON_IsTrue(v); return true;
-}
 static int month_days(int year, int month) {
     static const int days[] = {31,28,31,30,31,30,31,31,30,31,30,31};
     return days[month - 1] + (month == 2 && year % 4 == 0 && (year % 100 != 0 || year % 400 == 0));
@@ -150,68 +145,48 @@ bool weather_location_valid(const weather_location_t *v) {
          !strcmp(v->timezone, "Asia/Macau") || !strcmp(v->timezone, "Asia/Taipei")) &&
         isfinite(v->lat) && isfinite(v->lon) && v->lat >= 0 && v->lat <= 54 && v->lon >= 73 && v->lon <= 135;
 }
-static bool point(cJSON *root, weather_location_t *v) {
-    return cJSON_IsObject(root) && number(root, "lat", 0, 54, &v->lat) &&
-        number(root, "lon", 73, 135, &v->lon) && string_field(root, "timezone", v->timezone, sizeof(v->timezone), false) &&
-        string_field(root, "locationId", v->id, sizeof(v->id), false);
-}
-static bool location(cJSON *root, weather_location_t *v) {
-    memset(v, 0, sizeof(*v));
-    return point(root, v) && string_field(root, "name", v->name, sizeof(v->name), false) &&
-        string_field(root, "admin1", v->admin1, sizeof(v->admin1), true) &&
-        string_field(root, "admin2", v->admin2, sizeof(v->admin2), true) &&
-        string_field(root, "country", v->country, sizeof(v->country), false) && weather_location_valid(v);
-}
-bool weather_location_parse(const char *json, size_t length, weather_location_t *out) {
-    cJSON *root = document(json, length); weather_location_t v;
-    bool ok = root && location(root, &v);
-    if (ok) *out = v;
-    cJSON_Delete(root); return ok;
-}
-bool weather_locations_parse(const char *json, size_t length, weather_location_t *out, unsigned page_size,
-                             unsigned *count, unsigned *total, unsigned *page) {
-    *count = *total = *page = 0; cJSON *root = document(json, length);
-    cJSON *list = cJSON_GetObjectItemCaseSensitive(root, "locations");
-    int n = cJSON_GetArraySize(list);
-    int size = 0, all = 0, current = 0;
-    bool ok = root && out && page_size && page_size <= WEATHER_SEARCH_BATCH_SIZE &&
-        cJSON_IsArray(list) && n <= (int)page_size &&
-        integer(root, "pageSize", (int)page_size, (int)page_size, &size) &&
-        integer(root, "total", 0, WEATHER_SEARCH_TOTAL_LIMIT, &all) &&
-        integer(root, "page", 0, WEATHER_SEARCH_TOTAL_LIMIT - 1, &current) &&
-        (all ? current * size < all && n == (all - current * size < size ? all - current * size : size) : !current && !n);
-    for (int i = 0; ok && i < n; ++i) ok = location(cJSON_GetArrayItem(list, i), &out[i]);
-    if (ok) { *count = (unsigned)n; *total = (unsigned)all; *page = (unsigned)current; }
-    cJSON_Delete(root); return ok;
-}
-bool weather_catalog_parse(const char *json, size_t length, bool *enabled, bool *available) {
-    *enabled = *available = false;
-    cJSON *root = document(json, length); int schema;
-    cJSON *list = cJSON_GetObjectItemCaseSensitive(root, "components");
-    bool ok = root && integer(root, "schemaVersion", 1, 1, &schema) && cJSON_IsArray(list) && cJSON_GetArraySize(list) <= 16;
-    bool found = false; cJSON *item;
-    cJSON_ArrayForEach(item, list) {
-        cJSON *code = cJSON_GetObjectItemCaseSensitive(item, "code");
-        if (cJSON_IsString(code) && !strcmp(code->valuestring, "weather")) {
-            if (found || !integer(item, "schemaVersion", 1, 1, &schema) ||
-                !boolean(item, "enabled", enabled) || !boolean(item, "available", available)) ok = false;
-            found = true;
-        }
-    }
-    cJSON_Delete(root); return ok && found;
-}
-void weather_error_code(const char *json, size_t length, char *code, size_t capacity) {
-    if (!capacity) return;
-    code[0] = 0;
+// Open-Meteo 城市搜索结果 → weather_location_t。
+// 只保留中国大陆（country_code=CN）并落在产品允许的经纬度框内；时区统一归一到
+// Asia/Shanghai——中国全境行政时间都是 UTC+8，weather_local_day 也按 +8 计算。
+// Open-Meteo geocoding results → weather_location_t. Keep only mainland China
+// (country_code=CN) inside the product's lat/lon box, and normalise the timezone to
+// Asia/Shanghai: China's civil time is UTC+8 nationwide and weather_local_day uses +8.
+bool weather_om_locations_parse(const char *json, size_t length,
+                                weather_location_t *out, unsigned capacity, unsigned *count) {
+    if (!out || !capacity || !count) return false;
+    *count = 0;
     cJSON *root = document(json, length);
-    if (root) (void)string_field(root, "code", code, capacity, false);
-    cJSON_Delete(root);
-}
-static bool timestamp_field(cJSON *root, const char *key, bool nullable, int64_t *out) {
-    cJSON *v = cJSON_GetObjectItemCaseSensitive(root, key);
-    if (nullable && cJSON_IsNull(v)) { *out = 0; return true; }
-    if (!cJSON_IsString(v)) return false;
-    *out = weather_timestamp(v->valuestring); return *out != 0;
+    if (!root) return false;
+    cJSON *list = cJSON_GetObjectItemCaseSensitive(root, "results");
+    bool ok = !list || cJSON_IsArray(list);
+    int n = cJSON_GetArraySize(list);
+    unsigned used = 0;
+    for (int i = 0; ok && i < n && used < capacity; ++i) {
+        cJSON *item = cJSON_GetArrayItem(list, i);
+        weather_location_t v; memset(&v, 0, sizeof(v));
+        char country_code[8];
+        double lat = 0, lon = 0; int id = 0;
+        // 只收中国大陆；境外结果（含港澳台）没有对应的时区归一依据，直接跳过。
+        // Mainland China only; overseas results have no timezone basis here and are skipped.
+        if (!string_field(item, "country_code", country_code, sizeof(country_code), false) ||
+            strcmp(country_code, "CN")) continue;
+        if (!number(item, "latitude", 0, 54, &lat) || !number(item, "longitude", 73, 135, &lon) ||
+            !integer(item, "id", 1, 2147483647, &id)) continue;
+        if (!string_field(item, "name", v.name, sizeof(v.name), false)) continue;
+        (void)string_field(item, "admin1", v.admin1, sizeof(v.admin1), true);
+        (void)string_field(item, "admin2", v.admin2, sizeof(v.admin2), true);
+        if (!string_field(item, "country", v.country, sizeof(v.country), true) || !v.country[0])
+            snprintf(v.country, sizeof(v.country), "%s", "中国");
+        v.lat = lat; v.lon = lon;
+        // 前缀 OM 让来源可辨，同时保持 weather_location_valid 要求的大写字母数字形态。
+        // The OM prefix keeps the source recognisable while staying uppercase alnum.
+        snprintf(v.id, sizeof(v.id), "OM%d", id);
+        snprintf(v.timezone, sizeof(v.timezone), "%s", "Asia/Shanghai");
+        if (!weather_location_valid(&v)) continue;
+        out[used++] = v;
+    }
+    cJSON_Delete(root); *count = used;
+    return ok;
 }
 bool weather_forecast_valid(const weather_forecast_t *f, int64_t now) {
     if (!f || !weather_clock_valid(now) || !weather_location_valid(&f->location) ||
@@ -230,31 +205,118 @@ bool weather_forecast_valid(const weather_forecast_t *f, int64_t now) {
     }
     return true;
 }
-bool weather_forecast_parse(const char *json, size_t length, int64_t now,
-                           const weather_location_t *selected, weather_forecast_t *out) {
-    cJSON *root = document(json, length); weather_forecast_t f = {0}; int schema; bool stale = false;
-    cJSON *days = cJSON_GetObjectItemCaseSensitive(root, "days");
-    char source[16];
-    bool ok = root && weather_location_valid(selected) && integer(root, "schemaVersion", 1, 1, &schema) &&
-        string_field(root, "source", source, sizeof(source), false) && !strcmp(source, "QWeather") &&
-        point(cJSON_GetObjectItemCaseSensitive(root, "location"), &f.location) &&
-        !strcmp(f.location.id, selected->id) &&
-        !strcmp(f.location.timezone, selected->timezone) &&
-        fabs(f.location.lat - selected->lat) <= .011 && fabs(f.location.lon - selected->lon) <= .011 &&
-        cJSON_IsArray(days) && cJSON_GetArraySize(days) == 2 &&
-        timestamp_field(root, "fetchedAt", false, &f.fetched) && timestamp_field(root, "freshUntil", false, &f.fresh) &&
-        timestamp_field(root, "serveUntil", false, &f.serve) && boolean(root, "stale", &stale);
-    if (ok) { f.location = *selected; f.stale = stale; }
-    for (int i = 0; ok && i < 2; ++i) {
-        cJSON *item = cJSON_GetArrayItem(days, i); char date[11], code[4]; weather_day_t *d = &f.days[i];
-        ok = string_field(item, "date", date, sizeof(date), false) && (d->date = parse_date(date)) >= 0 &&
-            number(item, "minC", -90, 65, &d->min_c) && number(item, "maxC", -90, 65, &d->max_c) &&
-            integer(item, "dayHumidityPct", 0, 100, &d->humidity) &&
-            string_field(item, "conditionCode", code, sizeof(code), false) && strlen(code) == 3 &&
-            (d->code = digits(code, 3)) >= 100 && string_field(item, "conditionText", d->condition, sizeof(d->condition), false) &&
-            timestamp_field(item, "sunrise", true, &d->sunrise) && timestamp_field(item, "sunset", true, &d->sunset);
+// WMO 天气码 → 与 weather_scene()／界面共用的 QWeather 兼容码与中文描述。
+// WMO weather code → QWeather-compatible code shared with weather_scene()/UI, plus Chinese text.
+int weather_om_condition_code(int wmo) {
+    switch (wmo) {
+    case 0: return 100;                        // 晴
+    case 1: return 102;                        // 少云
+    case 2: return 101;                        // 多云
+    case 3: return 104;                        // 阴
+    case 45: case 48: return 501;              // 雾 / 雾凇
+    case 51: case 53: return 309;              // 毛毛雨
+    case 55: return 305;                       // 小雨
+    case 56: case 57: return 313;              // 冻雨
+    case 61: return 305;                       // 小雨
+    case 63: return 306;                       // 中雨
+    case 65: return 307;                       // 大雨
+    case 66: case 67: return 313;              // 冻雨
+    case 71: return 400;                       // 小雪
+    case 73: return 401;                       // 中雪
+    case 75: return 402;                       // 大雪
+    case 77: return 400;                       // 米雪按小雪处理
+    case 80: return 300;                       // 阵雨
+    case 81: return 306;                       // 中雨
+    case 82: return 307;                       // 大雨
+    case 85: case 86: return 407;              // 阵雪
+    case 95: return 302;                       // 雷阵雨
+    case 96: case 99: return 304;              // 雷阵雨伴有冰雹
+    default: return 100;                       // 未知码按晴处理，避免整体校验失败
     }
-    ok = ok && weather_forecast_valid(&f, now);
+}
+const char *weather_om_condition_text(int wmo) {
+    switch (wmo) {
+    case 0: return "晴";
+    case 1: return "少云";
+    case 2: return "多云";
+    case 3: return "阴";
+    case 45: return "雾";
+    case 48: return "雾凇";
+    case 51: case 53: return "毛毛雨";
+    case 55: return "小雨";
+    case 56: case 57: case 66: case 67: return "冻雨";
+    case 61: return "小雨";
+    case 63: return "中雨";
+    case 65: return "大雨";
+    case 71: return "小雪";
+    case 73: return "中雪";
+    case 75: return "大雪";
+    case 77: return "米雪";
+    case 80: return "阵雨";
+    case 81: return "中雨";
+    case 82: return "大雨";
+    case 85: case 86: return "阵雪";
+    case 95: return "雷阵雨";
+    case 96: case 99: return "雷阵雨伴有冰雹";
+    default: return "未知";
+    }
+}
+// "YYYY-MM-DDTHH:MM"（本地时间）→ UTC 秒；offset 为响应里给出的本地时区偏移。
+// "YYYY-MM-DDTHH:MM" local time → UTC seconds, using the response's local offset.
+static int64_t om_local_seconds(const char *s, int offset) {
+    if (!s || strnlen(s, 17) < 16 || s[10] != 'T' || s[13] != ':') return 0;
+    char date[11]; memcpy(date, s, 10); date[10] = 0;
+    int32_t day = parse_date(date);
+    int h = digits(s + 11, 2), m = digits(s + 14, 2);
+    if (day < 0 || h < 0 || h > 23 || m < 0 || m > 59) return 0;
+    return (int64_t)day * 86400 + h * 3600 + m * 60 - offset;
+}
+bool weather_om_forecast_parse(const char *json, size_t length, int64_t now,
+                               const weather_location_t *selected, weather_forecast_t *out) {
+    if (!selected || !out || !weather_location_valid(selected)) return false;
+    cJSON *root = document(json, length);
+    if (!root) return false;
+    weather_forecast_t f = {0};
+    int offset = 28800;
+    (void)integer(root, "utc_offset_seconds", -43200, 50400, &offset);
+    cJSON *daily = cJSON_GetObjectItemCaseSensitive(root, "daily");
+    cJSON *time = cJSON_GetObjectItemCaseSensitive(daily, "time");
+    cJSON *codes = cJSON_GetObjectItemCaseSensitive(daily, "weather_code");
+    cJSON *high = cJSON_GetObjectItemCaseSensitive(daily, "temperature_2m_max");
+    cJSON *low = cJSON_GetObjectItemCaseSensitive(daily, "temperature_2m_min");
+    cJSON *humidity = cJSON_GetObjectItemCaseSensitive(daily, "relative_humidity_2m_mean");
+    cJSON *sunrise = cJSON_GetObjectItemCaseSensitive(daily, "sunrise");
+    cJSON *sunset = cJSON_GetObjectItemCaseSensitive(daily, "sunset");
+    bool ok = cJSON_IsObject(daily) && cJSON_GetArraySize(time) >= 2 && cJSON_GetArraySize(codes) >= 2 &&
+        cJSON_GetArraySize(high) >= 2 && cJSON_GetArraySize(low) >= 2 &&
+        cJSON_GetArraySize(humidity) >= 2 && cJSON_GetArraySize(sunrise) >= 2 &&
+        cJSON_GetArraySize(sunset) >= 2;
+    for (unsigned i = 0; ok && i < 2; ++i) {
+        weather_day_t *d = &f.days[i];
+        cJSON *date = cJSON_GetArrayItem(time, i), *wmo = cJSON_GetArrayItem(codes, i);
+        cJSON *tmax = cJSON_GetArrayItem(high, i), *tmin = cJSON_GetArrayItem(low, i);
+        cJSON *rh = cJSON_GetArrayItem(humidity, i);
+        cJSON *up = cJSON_GetArrayItem(sunrise, i), *down = cJSON_GetArrayItem(sunset, i);
+        ok = cJSON_IsString(date) && (d->date = parse_date(date->valuestring)) >= 0 &&
+            cJSON_IsNumber(wmo) && cJSON_IsNumber(tmax) && cJSON_IsNumber(tmin) && cJSON_IsNumber(rh) &&
+            cJSON_IsString(up) && cJSON_IsString(down) &&
+            (d->sunrise = om_local_seconds(up->valuestring, offset)) != 0 &&
+            (d->sunset = om_local_seconds(down->valuestring, offset)) != 0;
+        if (!ok) break;
+        const int code = (int)(wmo->valuedouble + 0.5);
+        d->min_c = tmin->valuedouble; d->max_c = tmax->valuedouble;
+        d->humidity = (int)(rh->valuedouble + 0.5);
+        d->code = weather_om_condition_code(code);
+        snprintf(d->condition, sizeof(d->condition), "%s", weather_om_condition_text(code));
+    }
+    if (ok) {
+        f.location = *selected;
+        // 代理已退役：有效期在本地合成。Open-Meteo 每小时更新，1 小时算新鲜、2 小时失效。
+        // The proxy is retired, so validity is synthesised locally: Open-Meteo updates hourly,
+        // so treat one hour as fresh and two hours as the hard cap.
+        f.fetched = now; f.fresh = now + 3600; f.serve = now + 7200; f.stale = 0;
+        ok = weather_forecast_valid(&f, now);
+    }
     if (ok) *out = f;
     cJSON_Delete(root); return ok;
 }

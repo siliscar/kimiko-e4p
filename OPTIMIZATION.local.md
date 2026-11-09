@@ -132,3 +132,16 @@
 - 注意方向：gamma>1 才是压深（x^gamma<x, 0<x<1）；之前误用 gamma<1（0.7）是提亮，已纠正。
 - 验证：`book_ui_host_test.py` 断言改为「端点不动 + 单调不增 + 128<128」，通过。已烧录。
 - 遗留既有问题（非本次引入）：`tools/reader_images_host_test.py` 的切片锚点 `typedef struct {\n    size_t skip;` 与当前 app_book.c 结构脱节（切片只切 116 字节无用 typedef），测试早已失效；`s_warm_images` 等③优化新增符号也未同步进抽取列表。需单独重写该测试抽取逻辑。
+
+## 第五批（2026-11-10 天气替换为 Open-Meteo）
+
+### ⑮ 天气直连 Open-Meteo（去掉私有后台依赖）
+- 动因：原天气走 `CONFIG_PICO_COMPONENT_API_ORIGIN` 自建代理（`/api/v2/components` + locations/auto-location/forecast），后台属上游作者，独立维护后不可用。
+- 选型：Open-Meteo 免费、无需 API key、有中文地理编码与两日预报；已验证 `geocoding-api.open-meteo.com/v1/search?name=杭州&count=20&language=zh`（返回中文名/经纬度/`country_code`/时区）与 `api.open-meteo.com/v1/forecast?...&daily=weather_code,temperature_2m_max,temperature_2m_min,relative_humidity_2m_mean,sunrise,sunset&timezone=Asia%2FShanghai&forecast_days=2`（daily 支持 `relative_humidity_2m_mean`，响应约 600B）。
+- 实现：`weather_model.c` 删掉代理解析（`point/location/weather_location_parse/weather_locations_parse/weather_catalog_parse/weather_error_code/timestamp_field/weather_forecast_parse`），新增 `weather_om_locations_parse`、`weather_om_forecast_parse`、`weather_om_condition_code/text`。
+  - 城市：按 `country_code=CN` 过滤 + 产品经纬度框（lat 0–54/lon 73–135），时区统一归一 `Asia/Shanghai`（新疆 tzdata 为 `Asia/Urumqi`，中国行政时间统一 +08），id 形如 `OM1808926`。
+  - 预报：WMO→和风兼容码表（0→100/1→102/2→101/3→104/45,48→501/51,53→309/55,61→305/63→306/65,307/71→400/73→401/75→402/80→300/81→306/82→307/85,86→407/95→302/96,99→304），中文描述内置；`fetched=now/fresh=+1h/serve=+2h` 本地合成；日出日落按 `utc_offset_seconds` 折 UTC。
+  - 服务：`http_get` 改收完整 URL，`origin_ok`/`url_trusted` 只放行两个配置主机；移除 catalog 探测与 auto-location（无 IP 归属地第三方依赖），搜索一次取 20 条本地分页。
+- Kconfig：`PICO_COMPONENT_API_ORIGIN` → `WEATHER_GEOCODING_ORIGIN`（默认 `https://geocoding-api.open-meteo.com`）+ `WEATHER_FORECAST_ORIGIN`（默认 `https://api.open-meteo.com`）。
+- 测试：`weather_model_host_test.c` 重写（地理编码过滤/时区归一/容量/空结果、预报两日/WMO 码表/日出 UTC/坏响应/有效期边界），`weather_service_host_test.c` 重写（可信源、守卫、搜索分页、缓存、取消、429/坏读），`weather_raster_host_test.py` 改用新解析。全部 PASS；`idf.py build` 通过（bin 0x469480，比代理版略小）。
+- 已知取舍：`APP_WEATHER_DISABLED` 枚举保留但不再触发（无平台开关）；自动定位入口保留 UI 但只会提示手动选城。

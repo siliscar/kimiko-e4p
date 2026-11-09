@@ -25,8 +25,11 @@
 #include <strings.h>
 #include <time.h>
 
-#ifndef CONFIG_PICO_COMPONENT_API_ORIGIN
-#define CONFIG_PICO_COMPONENT_API_ORIGIN ""
+#ifndef CONFIG_WEATHER_GEOCODING_ORIGIN
+#define CONFIG_WEATHER_GEOCODING_ORIGIN "https://geocoding-api.open-meteo.com"
+#endif
+#ifndef CONFIG_WEATHER_FORECAST_ORIGIN
+#define CONFIG_WEATHER_FORECAST_ORIGIN "https://api.open-meteo.com"
 #endif
 #define WEATHER_RETRY_US (5LL * 60 * 1000000)
 #define WEATHER_SESSION_US (45LL * 1000000)
@@ -143,16 +146,11 @@ static bool cancelled(void) {
 static void result_notice(app_weather_state_t state, const char *message) {
     s_result.state = state; snprintf(s_result.notice, sizeof(s_result.notice), "%s", message);
 }
-static void api_error(int status, const char *body) {
-    char code[65];weather_error_code(body,strlen(body),code,sizeof(code));
-    if (!strcmp(code, "COMPONENT_DISABLED")) {
-        s_result.clear_cache = true; result_notice(APP_WEATHER_DISABLED, "天气服务暂未开放");
-    } else if (!strcmp(code, "CITY_SELECTION_REQUIRED")) {
-        result_notice(APP_WEATHER_CITY_REQUIRED, "未能确定城市，请手动选择");
-    } else if (status == 429 || !strcmp(code, "WEATHER_COOLDOWN") ||
-               !strcmp(code, "WEATHER_REFRESH_IN_PROGRESS")) {
-        result_notice(APP_WEATHER_UNAVAILABLE, "请求较多，请稍后重试");
-    } else result_notice(APP_WEATHER_UNAVAILABLE, "天气服务暂不可用，请稍后重试");
+// Open-Meteo 直接返回标准 HTTP 码：429 限流、其余按服务不可用降级。
+// Open-Meteo returns plain HTTP status: 429 is rate limiting, anything else degrades as unavailable.
+static void api_error(int status) {
+    if (status == 429) result_notice(APP_WEATHER_UNAVAILABLE, "请求较多，请稍后重试");
+    else result_notice(APP_WEATHER_UNAVAILABLE, "天气服务暂不可用，请稍后重试");
 }
 static int http_wait_ms(int64_t until) {
     if (until > s_deadline) until = s_deadline;
@@ -168,16 +166,30 @@ static esp_err_t weather_date_header(esp_http_client_event_t *event) {
     header->seen = true;
     return ESP_OK;
 }
-static bool http_get(const char *path, char *body, weather_clock_t *response_clock) {
+// 可信源：只允许配置的两个 Open-Meteo 主机，避免 URL 拼接把设备引到任意地址。
+// Trusted origins: only the two configured Open-Meteo hosts, so URL assembly cannot redirect
+// the device to an arbitrary address.
+static bool origin_ok(const char *origin) {
+    size_t n = strnlen(origin, 201);
+    if (n < 9 || n > 200 || strncmp(origin, "https://", 8)) return false;
+    const char *host = origin + 8;
+    if (!*host || strchr(host, '/') || strchr(host, '?') || strchr(host, '#') ||
+        strchr(host, '@') || strchr(host, ':')) return false;
+    return true;
+}
+static bool url_trusted(const char *url) {
+    static const char *const origins[] = {CONFIG_WEATHER_GEOCODING_ORIGIN, CONFIG_WEATHER_FORECAST_ORIGIN};
+    for (unsigned i = 0; i < sizeof(origins) / sizeof(origins[0]); ++i) {
+        const size_t n = strlen(origins[i]);
+        if (!origin_ok(origins[i])) return false;
+        if (!strncmp(url, origins[i], n) && url[n] == '/') return true;
+    }
+    return false;
+}
+static bool http_get(const char *url, char *body, weather_clock_t *response_clock) {
     weather_date_header_t header = {0};
     if (response_clock) *response_clock = (weather_clock_t){0};
-    char url[1024];
-    const char *origin = CONFIG_PICO_COMPONENT_API_ORIGIN;
-    size_t origin_length = strlen(origin);
-    if (strncmp(origin, "https://", 8) || origin_length < 9 || origin_length > 200 ||
-        strchr(origin + 8, '/') || strchr(origin + 8, '?') || strchr(origin + 8, '#') ||
-        strchr(origin + 8, '@') || cancelled()) return false;
-    if (snprintf(url, sizeof(url), "%s/api/v2%s", origin, path) >= (int)sizeof(url)) return false;
+    if (!url || strlen(url) >= 1024 || !url_trusted(url) || cancelled()) return false;
     int64_t started = esp_timer_get_time();
     esp_http_client_config_t config = {
         .url = url, .crt_bundle_attach = esp_crt_bundle_attach, .timeout_ms = 6000, .is_async = true,
@@ -226,7 +238,7 @@ static bool http_get(const char *path, char *body, weather_clock_t *response_clo
             if (used == WEATHER_BODY_LIMIT) ok = esp_http_client_is_complete_data_received(client);
             if (ok && !cancelled() && !memchr(body, 0, used)) {
                 int status = esp_http_client_get_status_code(client);
-                if (status != 200) { api_error(status, body); ok = false; }
+                if (status != 200) { api_error(status); ok = false; }
             } else ok = false;
         }
     }
@@ -293,53 +305,56 @@ static void weather_worker(void *arg) {
         if (status.state == WIFI_TRANSFER_ERROR || status.state == WIFI_TRANSFER_STOPPED) goto done;
         vTaskDelay(pdMS_TO_TICKS(100));
     }
-    if (cancelled() || !http_get("/components", body, NULL)) goto done;
-    bool enabled, available;
-    if (!weather_catalog_parse(body, strlen(body), &enabled, &available)) goto done;
-    if (!enabled) {
-        s_result.clear_cache = true; result_notice(APP_WEATHER_DISABLED, "天气服务暂未开放"); goto done;
-    }
-    if (!available) { result_notice(APP_WEATHER_UNAVAILABLE, "天气服务尚未就绪"); goto done; }
+    if (cancelled()) goto done;
+    // Open-Meteo 是公开服务，没有平台侧的开关与就绪探测，直接进入具体请求。
+    // Open-Meteo is a public service with no platform-side enable/ready probe, so go straight
+    // to the concrete request.
     if (s_request == APP_WEATHER_SEARCH) {
-        char escaped[577], path[640];
+        char escaped[577], url[1024];
         if (!weather_url_encode(s_query, escaped, sizeof(escaped))) goto done;
+        s_result.total = s_requested_total_known ? s_requested_total : 0;
         for (unsigned i = 0; i < s_requested_missing_count; ++i) {
-            unsigned page = s_requested_missing[i];
-            if (i && page * WEATHER_SEARCH_BATCH_SIZE >= s_result.total) break;
+            // 地理编码接口不分页：只有首批，翻页靠本批结果在本地切分。
+            // The geocoding API does not paginate: only the first batch exists and paging is
+            // served by slicing that batch locally.
+            if (s_requested_missing[i] != 0) { if (i) break; goto done; }
             weather_search_batch_t *batch = heap_caps_malloc(sizeof(*batch), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             if (!batch) goto done;
             memset(batch, 0, sizeof(*batch));
-            unsigned total;
-            snprintf(path, sizeof(path), "/components/weather/locations?q=%s&page=%u&pageSize=%u", escaped, page, WEATHER_SEARCH_BATCH_SIZE);
-            bool ok = http_get(path, body, NULL) && weather_locations_parse(body, strlen(body), batch->locations,
-                WEATHER_SEARCH_BATCH_SIZE, &batch->count, &total, &batch->page) && batch->page == page &&
-                (!s_requested_total_known || total == s_requested_total) && (!i || total == s_result.total);
-            if (!ok) { heap_caps_free(batch); goto done; }
-            s_result.total = total;
+            if (snprintf(url, sizeof(url), "%s/v1/search?name=%s&count=%u&language=zh&format=json",
+                         CONFIG_WEATHER_GEOCODING_ORIGIN, escaped, WEATHER_SEARCH_BATCH_SIZE) >= (int)sizeof(url)) {
+                heap_caps_free(batch); goto done;
+            }
+            if (!http_get(url, body, NULL) ||
+                !weather_om_locations_parse(body, strlen(body), batch->locations,
+                                            WEATHER_SEARCH_BATCH_SIZE, &batch->count)) {
+                heap_caps_free(batch); goto done;
+            }
+            s_result.total = batch->count;
             batch->next = s_result.batches; s_result.batches = batch;
         }
         result_notice(APP_WEATHER_READY, ""); goto done;
     }
-    weather_location_t city = s_requested_city;
+    // 自动定位需要 IP 归属地服务，本项目不再引入第三方依赖：缺城市时请用户手动选择。
+    // Auto-location would need an IP-geolocation service, which this project no longer depends
+    // on, so a missing city asks the user to pick one manually.
     if (s_request == APP_WEATHER_LOCATE || !s_requested_has_city) {
-        if (!http_get("/components/weather/auto-location", body, NULL)) {
-            if (s_result.state == APP_WEATHER_FAILED)
-                result_notice(APP_WEATHER_CITY_REQUIRED, "未能确定城市，请手动选择");
-            goto done;
-        }
-        if (!weather_location_parse(body, strlen(body), &city)) {
-            result_notice(APP_WEATHER_CITY_REQUIRED, "识别结果不支持，请手动选择"); goto done;
-        }
-        s_result.has_city = true; s_result.city = city;
+        result_notice(APP_WEATHER_CITY_REQUIRED, "请手动选择城市"); goto done;
     }
-    char path[256];
-    snprintf(path, sizeof(path), "/components/weather/forecast?locationId=%s", city.id);
+    weather_location_t city = s_requested_city;
+    char url[512];
+    if (snprintf(url, sizeof(url),
+                 "%s/v1/forecast?latitude=%.4f&longitude=%.4f"
+                 "&daily=weather_code,temperature_2m_max,temperature_2m_min,"
+                 "relative_humidity_2m_mean,sunrise,sunset"
+                 "&timezone=Asia%%2FShanghai&forecast_days=2",
+                 CONFIG_WEATHER_FORECAST_ORIGIN, city.lat, city.lon) >= (int)sizeof(url)) goto done;
     weather_clock_t clock = s_requested_clock, response_clock;
-    if (!http_get(path, body, &response_clock)) goto done;
+    if (!http_get(url, body, &response_clock)) goto done;
     // 仅接受同一可信HTTPS预报的时间；旧响应不能倒退参照或延长原始有效期。
     // Trust time only from the same HTTPS forecast; older responses cannot roll back time or extend expiry.
     if (response_clock.utc && (!clock.utc || clock_now(&response_clock) > clock_now(&clock))) clock = response_clock;
-    if (!weather_forecast_parse(body, strlen(body), clock_now(&clock), &city, &s_result.forecast)) goto done;
+    if (!weather_om_forecast_parse(body, strlen(body), clock_now(&clock), &city, &s_result.forecast)) goto done;
     s_result.clock = clock;
     s_result.has_forecast = true; result_notice(APP_WEATHER_READY, "");
 done:

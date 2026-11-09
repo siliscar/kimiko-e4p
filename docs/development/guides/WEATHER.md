@@ -14,17 +14,17 @@ The weather footer shows only a 36-pixel refresh icon centered at x=632 within t
 
 Weather settings has an independent Automatic refresh toggle, on by default at six-hour intervals. Turning it off preserves manual refresh, search and city selection. Automatic polling requires a placed weather widget and foreground Home or non-city component pages. Removing weather stops automatic requests; weather never interrupts reading or wakes standby. Missed refreshes resume on returning to these pages. Timing uses the original server timestamp across reboots. Earlier expiry, missing cache or a missing tomorrow can trigger an earlier fetch. Failures retain a five-minute minimum cooldown; expired data gains no extra lifetime.
 
-尚无城市时尝试平台 IP 城市估计，每次开机最多自动尝试一次，仅作参考。失败后点城市名称，输入中文、英文、拼音或首字母，点「搜索」并选择带市、省行政区的候选；城市页右上方统一提供一个「自动定位」入口。结果每页八项，城市名36px、行政区24px分两行显示，每行84px且整行可点，列表利用输入框至底部翻页区之间的空间；底部左右箭头的点击范围为72×64px，显示总数与页码。杭州可查到城市及 13 个区县，共 14 个地点。进入城市页不展开键盘，点输入框才展开，点空白处收起且保留文字及未确认拼音；展开键盘时暂不显示或响应结果与翻页，收起后恢复。有效搜索和自动定位会收起键盘。城市以官方地点 ID 持久保存，普通刷新不重新定位。支持官方中国 CSV 中的 3577 个地点及其四种 UTC+8 时区，不提供 GPS 或精确定位权限。
+尚无城市时不再尝试 IP 估计，点城市名称手动搜索：输入中文或英文（地理编码按中文返回名称），点「搜索」并选择带市、省行政区的候选；城市页右上方的「自动定位」入口已移除。一次请求取回最多 20 条，本地每页八项，城市名36px、行政区24px分两行显示，每行84px且整行可点，列表利用输入框至底部翻页区之间的空间；底部左右箭头的点击范围为72×64px，显示总数与页码。杭州可查到城市及 13 个区县，共 14 个地点。进入城市页不展开键盘，点输入框才展开，点空白处收起且保留文字及未确认拼音；展开键盘时暂不显示或响应结果与翻页，收起后恢复。有效搜索和自动定位会收起键盘。城市以 `OM` 前缀加地理编码地点 ID 持久保存，普通刷新不重新定位。只保留中国大陆结果，时区统一归一到 UTC+8，不提供 GPS 或精确定位权限。
 
-With no selected city, approximate platform IP estimation is attempted at most once per boot. Search Chinese, English, Pinyin or initials and select a prefecture/province-qualified result. Eight 84-pixel rows fill the area between the field and bottom pager, each with a 36-pixel name, 24-pixel administrative subline and full-row hit area. Paging arrows use 72x64-pixel hit areas beside totals/page numbers. Hangzhou has fourteen entries including thirteen districts/counties. The keyboard opens on field taps and dismisses without losing input. Results and paging are hidden and inactive while it is open; valid search/location requests dismiss it. The official location ID persists; normal refresh never relocates it. All 3577 official China CSV entries and their four UTC+8 timezones are supported, without GPS permissions.
+With no selected city there is no IP estimation: tap the city name to search manually in Chinese or English (the geocoder returns Chinese labels) and pick a prefecture/province-qualified result. The auto-locate entry is gone. One request returns up to 20 hits, sliced into eight-row pages locally; each row has a 36-pixel name, 24-pixel administrative subline and full-row hit area. Paging arrows use 72x64-pixel hit areas beside totals/page numbers. The keyboard opens on field taps and dismisses without losing input. Results and paging are hidden and inactive while it is open; valid searches dismiss it. Cities persist as an `OM` prefix plus the geocoding id; normal refresh never relocates them. Only mainland-China hits are kept and every timezone is normalised to UTC+8, without GPS permissions.
 
 共用键盘的键间背景、辅助键和首个候选均使用白底黑字，首选候选以双线框区分，候选字号32px。按键按下仍有局部黑白反馈。候选栏累计变化三次并停手400ms后，沿现有局部全像素GL16出口整理词栏；城市页保留这一刷新意图，不降为差分刷新。连续输入、按住及多点触摸期间不整理，不增加整屏清理或修改波形、电源策略。实际清晰度和累计残影仍需实屏验收。
 
 Shared keys, utility buttons and the first candidate use white paper/black text; a double outline marks the first candidate, with 32-pixel candidate text. Press feedback remains local and binary. Three candidate-strip changes followed by a 400ms touch-free pause use the existing full-pixel local GL16 settle, which the city page must not downgrade to differences. Continuous input, held keys and multitouch postpone cleanup, without whole-screen cleanup or waveform/power-policy changes. Optical clarity and accumulated residue still require panel acceptance.
 
-平台以和风官方公开 CSV 建立持久城市字典，城市搜索和英文转中文只查本站数据库，不访问和风 Geo、不消耗和风次数。IP 定位在平台内匹配标准地点并直接返回中文名、ID 和字典坐标；设备不再另发名称修正查询。字典包括市、区县等官方天气地点，不是完整行政区划名录。
+城市检索直接使用 Open-Meteo 地理编码（`geocoding-api.open-meteo.com`），`language=zh` 取中文名；不再维护本地城市字典，也不需要任何 API 密钥。设备只发一次查询，命中后按 `country_code=CN` 与产品允许的经纬度框过滤，境外结果直接丢弃。
 
-The platform persists the official public CSV as a city dictionary. Search and English-to-Chinese mapping query only that database, without QWeather Geo calls or quota use. IP results are canonicalized there and already include Chinese labels, IDs and dictionary coordinates. Firmware never issues a separate relabel request. The dictionary is a weather-location list, not an exhaustive administrative register.
+City search calls the Open-Meteo geocoder (`geocoding-api.open-meteo.com`) with `language=zh` for Chinese labels; there is no local dictionary and no API key. One request is issued, and hits are filtered by `country_code=CN` plus the product's lat/lon box, dropping overseas results.
 
 温度为当日最低/最高摄氏温度，以 `/` 分隔；湿度为白天预报湿度，不是实时传感器读数。日出为地平线上的半轮太阳；日落为半空完整太阳及向地面的箭头。缺失事件显示 `--:--`。全区背景区分晴、多云、阴、雨、雪、雨雪混合、雾霾、沙尘和雷雨；雾和霾共用背景，天气文字保留各自原描述。热、冷和未知代码保持中性，不推断天空状况。
 
@@ -40,9 +40,9 @@ Fog and Haze use treetops obscured by low mist banks, without region-wide parall
 
 ## 平台接口 / Platform Contract
 
-`CONFIG_PICO_COMPONENT_API_ORIGIN` 配置可信 HTTPS 平台源，默认留空（未配置时不启用天气）。仅访问该源的 `/api/v2/components` 及天气 `locations`、`auto-location`、`forecast` GET 接口。无 Cookie、设备注册或供应商密钥，不直连和风，不改变 OTA 下载源。
+天气使用公开的 Open-Meteo：`CONFIG_WEATHER_GEOCODING_ORIGIN`（默认 `https://geocoding-api.open-meteo.com`）做城市搜索，`CONFIG_WEATHER_FORECAST_ORIGIN`（默认 `https://api.open-meteo.com`）取两日预报。两个源都必须是无路径、无端口、无凭据的 HTTPS 主机名，设备只接受这两个前缀下的 URL。请求不带 Cookie、设备注册或任何 API 密钥，也不改变 OTA 下载源。预报有效期在设备本地合成（1 小时新鲜、2 小时失效）。WMO 天气码在设备内映射为原界面使用的和风兼容码与中文描述。
 
-`CONFIG_PICO_COMPONENT_API_ORIGIN` is a trusted HTTPS origin, defaulting to empty (weather disabled until configured). Only catalog and weather GET endpoints are used, without cookies, registration, provider credentials or direct QWeather calls. OTA sources are unchanged.
+Weather uses public Open-Meteo: `CONFIG_WEATHER_GEOCODING_ORIGIN` (default `https://geocoding-api.open-meteo.com`) for city search and `CONFIG_WEATHER_FORECAST_ORIGIN` (default `https://api.open-meteo.com`) for the two-day forecast. Both must be bare HTTPS host names with no path, port or credentials, and the device only accepts URLs under those two prefixes. Requests carry no cookies, registration or API key, and OTA sources are unchanged. Forecast validity is synthesised on-device (fresh for one hour, expired after two). WMO codes are mapped on-device into the QWeather-compatible codes and Chinese labels the existing UI already uses.
 
 产品配置使用系统可信证书束，不内置本地联调 CA；已移除联调用 USB 控制命令、页面/刷屏性能插桩及天气逐请求测时日志。独立开发证书、配置和测试包仅保留在忽略目录，不进入源码或已发布下载。
 

@@ -37,14 +37,17 @@ typedef enum {
 } weather_scene_t;
 
 bool weather_location_valid(const weather_location_t *location);
-bool weather_location_parse(const char *json, size_t length, weather_location_t *location);
-/// locations至少容纳page_size项；按请求大小校验完整批次。/ locations holds at least page_size items; validate the requested batch size.
-bool weather_locations_parse(const char *json, size_t length, weather_location_t *locations, unsigned page_size,
-                             unsigned *count, unsigned *total, unsigned *page);
-bool weather_catalog_parse(const char *json, size_t length, bool *enabled, bool *available);
-void weather_error_code(const char *json, size_t length, char *code, size_t capacity);
-bool weather_forecast_parse(const char *json, size_t length, int64_t now,
-                           const weather_location_t *location, weather_forecast_t *forecast);
+/// Open-Meteo 城市搜索结果解析；只保留中国大陆并归一化时区。
+/// Parse Open-Meteo geocoding results; keep mainland China only and normalise the timezone.
+bool weather_om_locations_parse(const char *json, size_t length,
+                                weather_location_t *locations, unsigned capacity, unsigned *count);
+/// Open-Meteo 两日预报解析；有效期在本地合成，不依赖上游代理。
+/// Parse the Open-Meteo two-day forecast; validity timestamps are synthesised locally.
+bool weather_om_forecast_parse(const char *json, size_t length, int64_t now,
+                               const weather_location_t *location, weather_forecast_t *forecast);
+/// WMO 天气码 → QWeather 兼容码与中文描述。/ WMO code to QWeather-compatible code and Chinese text.
+int weather_om_condition_code(int wmo);
+const char *weather_om_condition_text(int wmo);
 bool weather_forecast_valid(const weather_forecast_t *forecast, int64_t now);
 const weather_day_t *weather_day_for(const weather_forecast_t *forecast, int64_t now, bool tomorrow);
 bool weather_clock_valid(int64_t now);

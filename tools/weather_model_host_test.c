@@ -1,6 +1,7 @@
 /*
- * 中文：真实天气模型的边界、过期、跨日与坏响应回归。
- * English: Real weather model regressions for bounds, expiry, midnight and malformed responses.
+ * 中文：真实天气模型的边界、过期、跨日与坏响应回归（Open-Meteo 协议）。
+ * English: Real weather model regressions for bounds, expiry, midnight and malformed
+ * Open-Meteo responses.
  */
 #include "weather_model.h"
 #include "weather_test_data.h"
@@ -12,14 +13,22 @@
 
 static weather_location_t city;
 static int64_t now;
-static bool parse(cJSON *root) {
-    char *json=cJSON_PrintUnformatted(root);weather_forecast_t f;
-    bool ok=weather_forecast_parse(json,strlen(json),now,&city,&f);free(json);return ok;
+
+// 用一条城市搜索结果填充 city，供预报用例复用。
+// Fill city from one geocoding hit so the forecast cases can reuse it.
+static void pick_city(void) {
+    weather_location_t one[1];
+    unsigned count = 0;
+    assert(weather_om_locations_parse(WEATHER_TEST_GEOCODING_ONE, strlen(WEATHER_TEST_GEOCODING_ONE),
+                                      one, 1, &count) && count == 1);
+    city = one[0];
 }
-static void invalid_field(const char *field,const char *value) {
-    cJSON *root=cJSON_Parse(WEATHER_TEST_FORECAST);
-    cJSON_ReplaceItemInObjectCaseSensitive(root,field,cJSON_CreateString(value));
-    assert(!parse(root));cJSON_Delete(root);
+static bool parse(cJSON *root) {
+    char *json = cJSON_PrintUnformatted(root);
+    weather_forecast_t f;
+    bool ok = weather_om_forecast_parse(json, strlen(json), now, &city, &f);
+    free(json);
+    return ok;
 }
 static void http_dates(void) {
     const char *dates[]={
@@ -53,58 +62,139 @@ static void http_dates(void) {
     char truncated[30];const char *valid="Mon, 02 Nov 2026 00:30:00 GMT";
     for(size_t i=0;i<29;++i){memcpy(truncated,valid,i);truncated[i]=0;assert(!weather_http_date(truncated));}
 }
+// 城市搜索：只留中国大陆，时区归一到 +08，id 带 OM 前缀。
+// Geocoding keeps mainland China only, normalises the timezone to +08 and prefixes the id.
+static void geocoding(void) {
+    weather_location_t results[WEATHER_SEARCH_BATCH_SIZE];
+    unsigned count = 99;
+    assert(weather_om_locations_parse(WEATHER_TEST_GEOCODING, strlen(WEATHER_TEST_GEOCODING),
+                                      results, WEATHER_SEARCH_BATCH_SIZE, &count));
+    assert(count == 2);
+    assert(!strcmp(results[0].name, "杭州") && !strcmp(results[0].admin1, "浙江"));
+    assert(!strcmp(results[0].id, "OM1808926"));
+    assert(!strcmp(results[0].country, "中国"));
+    assert(results[0].lat > 30.28 && results[0].lat < 30.30 && results[0].lon > 120.15 && results[0].lon < 120.17);
+    assert(!strcmp(results[0].timezone, "Asia/Shanghai"));
+    // 新疆在 tzdata 里是 Asia/Urumqi，但中国行政时间统一 +08，必须归一到 +08。
+    // Xinjiang is Asia/Urumqi in tzdata, but China's civil time is +08 everywhere.
+    assert(!strcmp(results[1].name, "乌鲁木齐") && !strcmp(results[1].timezone, "Asia/Shanghai"));
+    assert(weather_location_valid(&results[0]) && weather_location_valid(&results[1]));
+    // 容量限制只截断，不影响其余结果的合法性。
+    // A smaller capacity only truncates; the kept entries stay valid.
+    count = 99;
+    assert(weather_om_locations_parse(WEATHER_TEST_GEOCODING, strlen(WEATHER_TEST_GEOCODING),
+                                      results, 1, &count) && count == 1);
+    // 无 results 键（未命中）是合法空结果，不是错误。
+    // A missing results key (no hits) is a valid empty result, not an error.
+    count = 99;
+    const char *empty = "{\"generationtime_ms\":0.1}";
+    assert(weather_om_locations_parse(empty, strlen(empty), results, 8, &count) && count == 0);
+    const char *not_array = "{\"results\":{}}";
+    assert(!weather_om_locations_parse(not_array, strlen(not_array), results, 8, &count) && count == 0);
+    const char *trailing = "{} trailing";
+    assert(!weather_om_locations_parse(trailing, strlen(trailing), results, 8, &count));
+    assert(!weather_om_locations_parse(WEATHER_TEST_GEOCODING, strlen(WEATHER_TEST_GEOCODING), results, 0, &count));
+    // 境外结果全部丢弃后仍是成功解析、零命中。
+    // Dropping every overseas result is still a successful parse with zero hits.
+    cJSON *root = cJSON_Parse(WEATHER_TEST_GEOCODING);
+    cJSON *list = cJSON_GetObjectItemCaseSensitive(root, "results");
+    cJSON_DeleteItemFromArray(list, 0);
+    cJSON_DeleteItemFromArray(list, 0);
+    char *json = cJSON_PrintUnformatted(root);
+    count = 99;
+    assert(weather_om_locations_parse(json, strlen(json), results, 8, &count) && count == 0);
+    free(json);
+    cJSON_Delete(root);
+}
 int main(void) {
     http_dates();
-    now=weather_timestamp("2026-11-02T00:30:00Z");assert(now);
-    assert(weather_location_parse(WEATHER_TEST_CITY,strlen(WEATHER_TEST_CITY),&city));
-    weather_forecast_t f={0};
-    assert(weather_forecast_parse(WEATHER_TEST_FORECAST,strlen(WEATHER_TEST_FORECAST),now,&city,&f));
-    assert(weather_day_for(&f,now,false)->humidity==68&&weather_day_for(&f,now,true)->min_c==16);
+    geocoding();
+    now = weather_timestamp("2026-11-02T00:30:00Z"); assert(now);
+    pick_city();
+    weather_forecast_t f = {0};
+    assert(weather_om_forecast_parse(WEATHER_TEST_FORECAST, strlen(WEATHER_TEST_FORECAST), now, &city, &f));
+    // WMO 2 → 多云(101)，61 → 小雨(305)；湿度与温度直接来自 daily 数组。
+    // WMO 2 → partly cloudy (101), 61 → light rain (305); humidity/temperature come from daily.
+    assert(f.days[0].code == 101 && !strcmp(f.days[0].condition, "多云"));
+    assert(f.days[1].code == 305 && !strcmp(f.days[1].condition, "小雨"));
+    assert(f.days[0].min_c == 17.0 && f.days[0].max_c == 24.0);
+    assert(weather_day_for(&f, now, false)->humidity == 68);
+    assert(weather_day_for(&f, now, true)->min_c == 16.0);
+    // 有效期在本地合成：1 小时新鲜、2 小时失效。
+    // Validity is synthesised locally: fresh for one hour, expired after two.
+    assert(f.fetched == now && f.fresh == now + 3600 && f.serve == now + 7200 && f.stale == 0);
     char text[193];
-    weather_date_text(weather_local_day(now),text,sizeof(text));assert(!strcmp(text,"11月02日  星期一"));
-    weather_time_text(f.days[0].sunrise,text,sizeof(text));assert(!strcmp(text,"06:15"));
-    weather_time_text(f.days[0].sunset,text,sizeof(text));assert(!strcmp(text,"17:12"));
-    weather_time_text(0,text,sizeof(text));assert(!strcmp(text,"--:--"));
-    assert(weather_forecast_valid(&f,f.serve-1)&&!weather_forecast_valid(&f,f.serve));
-    assert(weather_forecast_valid(&f,f.fetched-120)&&!weather_forecast_valid(&f,f.fetched-121));
-    assert(!weather_day_for(&f,0,false)&&!weather_forecast_valid(&f,now-3600));
-    assert(!weather_forecast_parse("{} trailing",11,now,&city,&f));
-    invalid_field("source","Other");invalid_field("fetchedAt","2026-11-02T08:20:00Z");
-    invalid_field("freshUntil","2026-11-01T00:00:00Z");invalid_field("serveUntil","2026-11-03T00:00:00Z");
-    invalid_field("stale","false");invalid_field("schemaVersion","1");
-    const char *bad_dates[]={"2026-02-29T00:00:00Z","2026-11-02T24:00:00Z","2026-11-02T00:60:00Z",
-        "2026-11-02T00:00:60Z","2026-11-02T00:00:00+08:00","2026-11-02T00:00:00.Z","abc"};
-    for(unsigned i=0;i<sizeof(bad_dates)/sizeof(*bad_dates);++i)assert(!weather_timestamp(bad_dates[i]));
-    assert(weather_timestamp("2028-02-29T23:59:59.123Z"));
-    for(int i=0;i<8;++i) {
-        cJSON *root=cJSON_Parse(WEATHER_TEST_FORECAST);cJSON *d=cJSON_GetArrayItem(cJSON_GetObjectItem(root,"days"),0);
-        if(i==0)cJSON_SetNumberValue(cJSON_GetObjectItem(d,"dayHumidityPct"),101);
-        if(i==1)cJSON_SetNumberValue(cJSON_GetObjectItem(d,"minC"),25);
-        if(i==2)cJSON_ReplaceItemInObject(d,"date",cJSON_CreateString("2026-11-03"));
-        if(i==3)cJSON_ReplaceItemInObject(d,"conditionCode",cJSON_CreateString("abc"));
-        if(i==4)cJSON_ReplaceItemInObject(d,"sunrise",cJSON_CreateString("2026-11-02T22:15:00Z"));
-        if(i==5)cJSON_DeleteItemFromObject(d,"sunset");
-        if(i==6)cJSON_ReplaceItemInObject(d,"conditionText",cJSON_CreateString("晴\n伪造"));
-        if(i==7)cJSON_SetNumberValue(cJSON_GetObjectItem(d,"dayHumidityPct"),1.5);
-        assert(!parse(root));cJSON_Delete(root);
+    weather_date_text(weather_local_day(now), text, sizeof(text));
+    assert(!strcmp(text, "11月02日  星期一"));
+    // 本地 06:15 日出折成 UTC 后，按 +08 显示仍是 06:15。
+    // A 06:15 local sunrise converts to UTC and still renders as 06:15 in +08.
+    weather_time_text(f.days[0].sunrise, text, sizeof(text)); assert(!strcmp(text, "06:15"));
+    weather_time_text(f.days[0].sunset, text, sizeof(text)); assert(!strcmp(text, "17:12"));
+    weather_time_text(0, text, sizeof(text)); assert(!strcmp(text, "--:--"));
+    assert(weather_local_day(f.days[0].sunrise) == f.days[0].date);
+    assert(weather_forecast_valid(&f, f.serve - 1) && !weather_forecast_valid(&f, f.serve));
+    assert(weather_forecast_valid(&f, f.fetched - 120) && !weather_forecast_valid(&f, f.fetched - 121));
+    assert(!weather_day_for(&f, 0, false) && !weather_forecast_valid(&f, now - 3600));
+    assert(!weather_om_forecast_parse("{} trailing", 11, now, &city, &f));
+    // 坏响应：缺数组、少一天、温度倒挂、日期与本地日不符、非数字湿度。
+    // Malformed responses: missing arrays, one day only, inverted range, wrong local date,
+    // non-numeric humidity.
+    cJSON *root = cJSON_Parse(WEATHER_TEST_FORECAST);
+    cJSON *daily = cJSON_GetObjectItemCaseSensitive(root, "daily");
+    const char *drops[] = {"relative_humidity_2m_mean", "sunrise", "sunset", "weather_code"};
+    for (unsigned i = 0; i < sizeof(drops) / sizeof(*drops); ++i) {
+        cJSON *copy = cJSON_Duplicate(root, 1);
+        cJSON_DeleteItemFromObject(cJSON_GetObjectItemCaseSensitive(copy, "daily"), drops[i]);
+        assert(!parse(copy));
+        cJSON_Delete(copy);
     }
-    cJSON *root=cJSON_Parse(WEATHER_TEST_FORECAST);
-    cJSON *d=cJSON_GetArrayItem(cJSON_GetObjectItem(root,"days"),0);
-    cJSON_ReplaceItemInObject(d,"sunrise",cJSON_CreateNull());cJSON_ReplaceItemInObject(d,"sunset",cJSON_CreateNull());
-    assert(parse(root));cJSON_Delete(root);
-    bool enabled,available;
-    assert(weather_catalog_parse(WEATHER_TEST_CATALOG,strlen(WEATHER_TEST_CATALOG),&enabled,&available)&&enabled&&available);
-    assert(!weather_catalog_parse("{\"schemaVersion\":2,\"components\":[]}",35,&enabled,&available));
-    root=cJSON_Parse(WEATHER_TEST_FORECAST);
-    cJSON_ReplaceItemInObject(root,"fetchedAt",cJSON_CreateString("2026-11-02T15:30:00Z"));
-    cJSON_ReplaceItemInObject(root,"freshUntil",cJSON_CreateString("2026-11-02T16:30:00Z"));
-    cJSON_ReplaceItemInObject(root,"serveUntil",cJSON_CreateString("2026-11-02T21:30:00Z"));
-    char *json=cJSON_PrintUnformatted(root);now=weather_timestamp("2026-11-02T16:10:00Z");
-    assert(weather_forecast_parse(json,strlen(json),now,&city,&f));
-    assert(weather_day_for(&f,now,false)->humidity==82&&!weather_day_for(&f,now,true));
-    free(json);cJSON_Delete(root);
-    assert(weather_scene(999)==WEATHER_SCENE_NEUTRAL&&weather_scene(100)==WEATHER_SCENE_SUN);
-    assert(weather_scene(302)==WEATHER_SCENE_STORM&&weather_scene(400)==WEATHER_SCENE_SNOW);
+    cJSON_DeleteItemFromArray(cJSON_GetObjectItemCaseSensitive(daily, "time"), 1);
+    assert(!parse(root));
+    cJSON_Delete(root);
+    root = cJSON_Parse(WEATHER_TEST_FORECAST);
+    daily = cJSON_GetObjectItemCaseSensitive(root, "daily");
+    cJSON_SetNumberValue(cJSON_GetArrayItem(cJSON_GetObjectItemCaseSensitive(daily, "temperature_2m_min"), 0), 25.0);
+    assert(!parse(root));
+    cJSON_Delete(root);
+    root = cJSON_Parse(WEATHER_TEST_FORECAST);
+    daily = cJSON_GetObjectItemCaseSensitive(root, "daily");
+    cJSON_ReplaceItemInArray(cJSON_GetObjectItemCaseSensitive(daily, "time"), 0, cJSON_CreateString("2026-11-03"));
+    assert(!parse(root));
+    cJSON_Delete(root);
+    root = cJSON_Parse(WEATHER_TEST_FORECAST);
+    daily = cJSON_GetObjectItemCaseSensitive(root, "daily");
+    cJSON_ReplaceItemInArray(cJSON_GetObjectItemCaseSensitive(daily, "relative_humidity_2m_mean"), 0,
+                             cJSON_CreateString("x"));
+    assert(!parse(root));
+    cJSON_Delete(root);
+    // 湿度越界与时间格式错误同样拒绝。
+    // Out-of-range humidity and a malformed time string are rejected too.
+    root = cJSON_Parse(WEATHER_TEST_FORECAST);
+    daily = cJSON_GetObjectItemCaseSensitive(root, "daily");
+    cJSON_SetNumberValue(cJSON_GetArrayItem(cJSON_GetObjectItemCaseSensitive(daily, "relative_humidity_2m_mean"), 0), 101.0);
+    assert(!parse(root));
+    cJSON_Delete(root);
+    root = cJSON_Parse(WEATHER_TEST_FORECAST);
+    daily = cJSON_GetObjectItemCaseSensitive(root, "daily");
+    cJSON_ReplaceItemInArray(cJSON_GetObjectItemCaseSensitive(daily, "sunrise"), 0, cJSON_CreateString("2026-11-02 06:15"));
+    assert(!parse(root));
+    cJSON_Delete(root);
+    // WMO 码表：每个码都要落进校验区间并有中文描述。
+    // WMO table: every code must land inside the validated range with Chinese text.
+    const int wmo_codes[] = {0, 1, 2, 3, 45, 48, 51, 53, 55, 56, 57, 61, 63, 65, 66, 67,
+                             71, 73, 75, 77, 80, 81, 82, 85, 86, 95, 96, 99, 42, -1};
+    for (unsigned i = 0; i < sizeof(wmo_codes) / sizeof(*wmo_codes); ++i) {
+        int code = weather_om_condition_code(wmo_codes[i]);
+        assert(code >= 100 && code <= 999);
+        assert(weather_om_condition_text(wmo_codes[i])[0]);
+        assert(weather_scene(code) != WEATHER_SCENE_NEUTRAL);
+    }
+    assert(weather_om_condition_code(0) == 100 && weather_om_condition_code(3) == 104);
+    assert(weather_om_condition_code(65) == 307 && weather_om_condition_code(75) == 402);
+    assert(weather_om_condition_code(95) == 302 && weather_om_condition_code(96) == 304);
+    assert(weather_om_condition_code(45) == 501 && weather_scene(501) == WEATHER_SCENE_FOG);
+    assert(weather_scene(999) == WEATHER_SCENE_NEUTRAL && weather_scene(100) == WEATHER_SCENE_SUN);
+    assert(weather_scene(302) == WEATHER_SCENE_STORM && weather_scene(400) == WEATHER_SCENE_SNOW);
     const int scene_codes[][24]={
         {100,150},
         {300,301,305,306,307,308,309,310,311,312,313,314,315,316,317,318,350,351,399},
@@ -131,49 +221,9 @@ int main(void) {
     assert(weather_url_encode("杭州 &?",text,sizeof(text))&&!strcmp(text,"%E6%9D%AD%E5%B7%9E%20%26%3F"));
     assert(!weather_url_encode("杭州",text,5)&&!text[0]);
     assert(weather_query_valid("杭州")&&weather_query_valid("hangzhou")&&!weather_query_valid("杭")&&!weather_query_valid("\xff\xff"));
-    weather_location_t results[WEATHER_CITY_LIMIT];unsigned count,total,page;
-    assert(WEATHER_CITY_LIMIT==8);
-    const char *last="{\"total\":9,\"page\":1,\"pageSize\":8,\"locations\":[" WEATHER_TEST_CITY "]}";
-    assert(weather_locations_parse(last,strlen(last),results,WEATHER_CITY_LIMIT,&count,&total,&page)&&count==1&&total==9&&page==1);
-    const char *bad_page="{\"total\":9,\"page\":0,\"pageSize\":8,\"locations\":[" WEATHER_TEST_CITY "]}";
-    assert(!weather_locations_parse(bad_page,strlen(bad_page),results,WEATHER_CITY_LIMIT,&count,&total,&page)&&!count);
-    root=cJSON_Parse("{\"total\":14,\"page\":0,\"pageSize\":8,\"locations\":[]}");
-    cJSON *locations=cJSON_GetObjectItem(root,"locations");
-    for(unsigned i=0;i<WEATHER_CITY_LIMIT;++i)cJSON_AddItemToArray(locations,cJSON_Parse(WEATHER_TEST_CITY));
-    json=cJSON_PrintUnformatted(root);
-    assert(weather_locations_parse(json,strlen(json),results,WEATHER_CITY_LIMIT,&count,&total,&page)&&count==8&&total==14&&!page);
-    free(json);cJSON_SetNumberValue(cJSON_GetObjectItem(root,"page"),1);
-    cJSON_DeleteItemFromArray(locations,7);cJSON_DeleteItemFromArray(locations,6);
-    json=cJSON_PrintUnformatted(root);
-    assert(weather_locations_parse(json,strlen(json),results,WEATHER_CITY_LIMIT,&count,&total,&page)&&count==6&&total==14&&page==1);
-    free(json);cJSON_SetNumberValue(cJSON_GetObjectItem(root,"pageSize"),5);
-    json=cJSON_PrintUnformatted(root);
-    assert(!weather_locations_parse(json,strlen(json),results,WEATHER_CITY_LIMIT,&count,&total,&page)&&!count);
-    free(json);cJSON_Delete(root);
-    weather_location_t batch[WEATHER_SEARCH_BATCH_SIZE];
-    root=cJSON_Parse("{\"total\":41,\"page\":0,\"pageSize\":20,\"locations\":[]}");
-    locations=cJSON_GetObjectItem(root,"locations");
-    for(unsigned i=0;i<WEATHER_SEARCH_BATCH_SIZE;++i)cJSON_AddItemToArray(locations,cJSON_Parse(WEATHER_TEST_CITY));
-    json=cJSON_PrintUnformatted(root);
-    assert(weather_locations_parse(json,strlen(json),batch,20,&count,&total,&page)&&count==20&&total==41&&!page);
-    assert(!weather_locations_parse(json,strlen(json),results,8,&count,&total,&page)&&!count);
-    assert(!weather_locations_parse(json,strlen(json),batch,0,&count,&total,&page)&&!count);
-    assert(!weather_locations_parse(json,strlen(json),batch,21,&count,&total,&page)&&!count);
-    free(json);cJSON_AddItemToArray(locations,cJSON_Parse(WEATHER_TEST_CITY));json=cJSON_PrintUnformatted(root);
-    assert(!weather_locations_parse(json,strlen(json),batch,20,&count,&total,&page)&&!count);
-    free(json);cJSON_DeleteItemFromArray(locations,20);
-    cJSON_SetNumberValue(cJSON_GetObjectItem(root,"total"),4001);json=cJSON_PrintUnformatted(root);
-    assert(!weather_locations_parse(json,strlen(json),batch,20,&count,&total,&page)&&!count);
-    free(json);cJSON_SetNumberValue(cJSON_GetObjectItem(root,"total"),4000);
-    cJSON_SetNumberValue(cJSON_GetObjectItem(root,"page"),199);json=cJSON_PrintUnformatted(root);
-    assert(weather_locations_parse(json,strlen(json),batch,20,&count,&total,&page)&&count==20&&total==4000&&page==199);
-    free(json);cJSON_SetNumberValue(cJSON_GetObjectItem(root,"page"),200);json=cJSON_PrintUnformatted(root);
-    assert(!weather_locations_parse(json,strlen(json),batch,20,&count,&total,&page)&&!count);
-    free(json);cJSON_Delete(root);
-    weather_location_t wrong=city;strcpy(wrong.id,"101210113");
-    assert(!weather_forecast_parse(WEATHER_TEST_FORECAST,strlen(WEATHER_TEST_FORECAST),
-        weather_timestamp("2026-11-02T00:30:00Z"),&wrong,&f));
-    strcpy(wrong.id,"bad");assert(!weather_location_valid(&wrong));
+    // 地点校验：id 形态、时区白名单与经纬度框。
+    // Location validation: id shape, timezone allow-list and the lat/lon box.
+    weather_location_t wrong=city;strcpy(wrong.id,"bad");assert(!weather_location_valid(&wrong));
     const char *invalid_ids[]={"", "abcD", "F4F1?x=1", "../F4F1", "123?", "F4 F1", "F4_F1", "F4F1%20"};
     for(unsigned i=0;i<sizeof(invalid_ids)/sizeof(*invalid_ids);++i) {
         wrong=city;snprintf(wrong.id,sizeof(wrong.id),"%s",invalid_ids[i]);
@@ -182,22 +232,12 @@ int main(void) {
     wrong=city;memset(wrong.id,'A',sizeof(wrong.id));assert(!weather_location_valid(&wrong));
     wrong=city;strcpy(wrong.id,"CA3");assert(weather_location_valid(&wrong));
     strcpy(wrong.id,"0123456789ABCDEF");assert(weather_location_valid(&wrong));
-    weather_location_t alpha;
-    assert(weather_location_parse(WEATHER_TEST_ALPHA_CITY,strlen(WEATHER_TEST_ALPHA_CITY),&alpha));
-    assert(!strcmp(alpha.id,"F4F1")&&!strcmp(alpha.timezone,"Asia/Taipei"));
-    root=cJSON_Parse(WEATHER_TEST_FORECAST);
-    cJSON_ReplaceItemInObject(root,"location",cJSON_Parse(WEATHER_TEST_ALPHA_CITY));
-    json=cJSON_PrintUnformatted(root);
-    assert(weather_forecast_parse(json,strlen(json),weather_timestamp("2026-11-02T00:30:00Z"),&alpha,&f));
-    assert(!strcmp(f.location.id,"F4F1"));free(json);cJSON_Delete(root);
     wrong=city;wrong.lat=9.55;assert(weather_location_valid(&wrong));
-    strcpy(wrong.timezone,"Asia/Taipei");assert(weather_location_valid(&wrong));
-    wrong=city;strcpy(wrong.timezone,"Asia/Taipei");
-    assert(!weather_forecast_parse(WEATHER_TEST_FORECAST,strlen(WEATHER_TEST_FORECAST),
-        weather_timestamp("2026-11-02T00:30:00Z"),&wrong,&f));
-    char nested[100];memset(nested,'[',40);memset(nested+40,']',40);nested[80]=0;
-    weather_error_code(nested,80,text,sizeof(text));assert(!text[0]);
+    wrong=city;wrong.lat=60;assert(!weather_location_valid(&wrong));
+    wrong=city;wrong.lon=140;assert(!weather_location_valid(&wrong));
+    wrong=city;strcpy(wrong.timezone,"Asia/Tokyo");assert(!weather_location_valid(&wrong));
+    wrong=city;strcpy(wrong.timezone,"Asia/Urumqi");assert(!weather_location_valid(&wrong));
     f.stale=255;assert(!weather_forecast_valid(&f,now));
     city.timezone[0]=0;assert(!weather_location_valid(&city));
-    puts("PASS: weather strict protocol, dates, solar UTC conversion, ranges, stale/expiry, unknown scenes, UTF-8 query");
+    puts("PASS: Open-Meteo geocoding/forecast, WMO mapping, dates, solar UTC conversion, ranges, expiry");
 }

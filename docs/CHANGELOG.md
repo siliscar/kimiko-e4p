@@ -3,6 +3,14 @@
 按版本简述对用户可见的变化；使用方法见 [README](../README.zh-CN.md)。
 User-visible changes by release; see [README](../README.md) for usage.
 
+## 未发布 · 天气改用 Open-Meteo / Unreleased · Weather moves to Open-Meteo
+
+- 天气改为直接使用公开的 Open-Meteo：城市搜索走地理编码接口、预报走 `/v1/forecast`，不需要 API 密钥，也不再依赖任何自建平台。原 `CONFIG_PICO_COMPONENT_API_ORIGIN` 代理协议移除。/ Weather now uses public Open-Meteo directly: city search via the geocoding API and forecasts via `/v1/forecast`, with no API key and no self-hosted platform. The old `CONFIG_PICO_COMPONENT_API_ORIGIN` proxy protocol is removed.
+- 只保留中国大陆结果，时区统一归一到 UTC+8；城市 ID 形如 `OM1808926`，普通刷新不重新定位。/ Only mainland-China hits are kept, every timezone normalises to UTC+8, city ids look like `OM1808926`, and normal refreshes never relocate a city.
+- WMO 天气码在设备内映射为原界面使用的和风兼容码与中文描述，背景与图标不变。/ WMO codes are mapped on-device to the QWeather-compatible codes and Chinese labels the existing UI already uses, keeping backgrounds and icons unchanged.
+- 「自动定位」移除：不再引入 IP 归属地第三方服务，没有城市时请手动搜索。/ Auto-locate is removed: no third-party IP-geolocation is introduced, so pick a city manually when none is set.
+- 有效期在设备本地合成（1 小时新鲜、2 小时失效），替代代理返回的时间窗。/ Validity is synthesised on-device (fresh for one hour, expired after two) instead of the proxy-provided window.
+
 ## v1.0.6 · 2026-11-06
 
 - 重构书架分类功能。

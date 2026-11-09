@@ -1,13 +1,20 @@
-menu "Built-in components"
-    config PICO_COMPONENT_API_ORIGIN
-        string "HTTPS platform origin for built-in components (no trailing slash)"
-        default ""
+menu "Weather (Open-Meteo)"
+    config WEATHER_GEOCODING_ORIGIN
+        string "Geocoding API origin (no trailing slash)"
+        default "https://geocoding-api.open-meteo.com"
         help
-            Weather uses only the platform proxy. Never configure a provider
-            endpoint or put provider credentials in firmware. Public activation
-            requires a configured platform and confirmed attribution/license.
-            Empty disables the built-in weather proxy until a self-hosted
-            platform origin is configured.
+            City search uses this public Open-Meteo geocoding endpoint. Only
+            mainland-China results are kept. Never point it at a provider that
+            needs an embedded credential.
+            Empty disables city search.
+
+    config WEATHER_FORECAST_ORIGIN
+        string "Forecast API origin (no trailing slash)"
+        default "https://api.open-meteo.com"
+        help
+            Two-day forecasts come from this public Open-Meteo endpoint, keyed
+            by the selected city's coordinates. No API key is used.
+            Empty disables weather updates.
 endmenu
 
 # 触摸阈值与丢点诊断；诊断日志仅在排查构建启用。

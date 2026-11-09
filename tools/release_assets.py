@@ -11,7 +11,7 @@ import re
 import shutil
 import time
 
-REPO = 'https://github.com/chopper1026/kimiko-e4p/releases/download/'
+REPO = 'https://github.com/siliscar/kimiko-e4p/releases/download/'
 
 def hydrate(source: Path, output: Path) -> None:
     catalog = source / 'release-assets.json'

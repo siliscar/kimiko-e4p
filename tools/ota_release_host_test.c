@@ -4,7 +4,7 @@
 #include <assert.h>
 #include <stdio.h>
 #include <string.h>
-static const char *valid = "{\"schema\":1,\"version\":\"0.3.3-rc79\",\"project\":\"Read_Pico\",\"board\":\"METALIO-EINK4P\",\"layout\":\"kimiko-e4p-dual-5m-v1\",\"minimum_base_version\":\"0.3.3-rc72\",\"url\":\"https://wegooo-cell.github.io/read-pico-reader/Pico-update-0.3.3-rc79.bin\",\"sha256\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"notes\":\"Test release\",\"size\":4096}";
+static const char *valid = "{\"schema\":1,\"version\":\"0.3.3-rc79\",\"project\":\"Read_Pico\",\"board\":\"METALIO-EINK4P\",\"layout\":\"kimiko-e4p-dual-5m-v1\",\"minimum_base_version\":\"0.3.3-rc72\",\"url\":\"https://siliscar.github.io/kimiko-e4p/Pico-update-0.3.3-rc79.bin\",\"sha256\":\"0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef\",\"notes\":\"Test release\",\"size\":4096}";
 int main(void) {
  pico_release_t release;
  assert(pico_release_parse(valid,strlen(valid),&release)==ESP_OK);
@@ -12,22 +12,22 @@ int main(void) {
  assert(pico_version_compare("0.3.3-rc79","0.3.3-rc9")>0);
  assert(pico_version_compare("0.3.3","0.3.3-rc79")>0);
  assert(pico_version_compare("0.4.0-rc1","0.3.3")>0);
- assert(pico_release_url_valid("https://kimiko.mantake.shop/files/firmware/ota/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.bin"));
+ assert(pico_release_url_valid("https://siliscar.github.io/kimiko-e4p/0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef.bin"));
  assert(!pico_release_url_valid("https://kiikoread.com/Pico-update.bin"));
- assert(!pico_release_url_valid("https://kimiko.mantake.shop/files/firmware/ota/sub/x.bin"));
- assert(!pico_release_url_valid("https://kimiko.mantake.shop.evil/files/firmware/ota/a.bin"));
- assert(!pico_release_url_valid("https://kimiko.mantake.shop@evil/files/firmware/ota/a.bin"));
- assert(!pico_release_url_valid("https://kimiko.mantake.shop:8443/files/firmware/ota/a.bin"));
- assert(!pico_release_url_valid("https://kimiko.mantake.shop/files/firmware/ota/../a.bin"));
- assert(!pico_release_url_valid("https://kimiko.mantake.shop/files/firmware/ota/a.bin?url=evil"));
- assert(!pico_release_url_valid("http://wegooo-cell.github.io/read-pico-reader/a.bin"));
- assert(!pico_release_url_valid("https://wegooo-cell.github.io.evil/read-pico-reader/a.bin"));
- assert(!pico_release_url_valid("https://wegooo-cell.github.io/read-pico-reader/../a.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io/kimiko-e4p/sub/x.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io.evil/files/firmware/ota/a.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io@evil/files/firmware/ota/a.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io:8443/files/firmware/ota/a.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io/kimiko-e4p/../a.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io/kimiko-e4p/a.bin?url=evil"));
+ assert(!pico_release_url_valid("http://siliscar.github.io/kimiko-e4p/a.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io.evil/kimiko-e4p/a.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io/kimiko-e4p/../a.bin"));
  // 本仓库 Pages 站点由打包脚本写入清单，设备必须能取用。
  // The packaging script writes this repository's Pages origin, so the device must accept it.
- assert(pico_release_url_valid("https://chopper1026.github.io/kimiko-e4p/Pico-update-0.3.3-rc98.bin"));
- assert(!pico_release_url_valid("https://chopper1026.github.io/kimiko-e4p/../a.bin"));
- assert(!pico_release_url_valid("https://chopper1026.github.io/kimiko-e4p.evil/a.bin"));
+ assert(pico_release_url_valid("https://siliscar.github.io/kimiko-e4p/Pico-update-0.3.3-rc98.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io/kimiko-e4p/../a.bin"));
+ assert(!pico_release_url_valid("https://siliscar.github.io/kimiko-e4p.evil/a.bin"));
  assert(pico_release_parse(valid,strlen(valid)+1,&release)!=ESP_OK);
  assert(pico_release_parse("{}",2,&release)!=ESP_OK);
  char altered[2048]; snprintf(altered,sizeof(altered),"%s junk",valid);

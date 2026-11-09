@@ -26,7 +26,7 @@
 #include <time.h>
 
 #ifndef CONFIG_PICO_COMPONENT_API_ORIGIN
-#define CONFIG_PICO_COMPONENT_API_ORIGIN "https://kimiko.mantake.shop"
+#define CONFIG_PICO_COMPONENT_API_ORIGIN ""
 #endif
 #define WEATHER_RETRY_US (5LL * 60 * 1000000)
 #define WEATHER_SESSION_US (45LL * 1000000)

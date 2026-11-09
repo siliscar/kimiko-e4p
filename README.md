@@ -1,6 +1,6 @@
 <div align="center">
 
-<a href="https://kimiko.mantake.shop"><img src="assets/image/kimiko-logo.png" width="112" height="112" alt="kimiko"></a>
+<a href="https://github.com/siliscar/kimiko-e4p"><img src="assets/image/kimiko-logo.png" width="112" height="112" alt="kimiko"></a>
 
 # kimiko
 
@@ -12,13 +12,13 @@
 
 基于 [kiikoread](https://github.com/wegooo-cell/read-pico-reader) 开发。
 
-[![Release](https://img.shields.io/github/v/release/chopper1026/kimiko-e4p?label=release&color=24292f)](https://github.com/chopper1026/kimiko-e4p/releases/latest)
-[![Build](https://github.com/chopper1026/kimiko-e4p/actions/workflows/build.yml/badge.svg)](https://github.com/chopper1026/kimiko-e4p/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/siliscar/kimiko-e4p?label=release&color=24292f)](https://github.com/siliscar/kimiko-e4p/releases/latest)
+[![Build](https://github.com/siliscar/kimiko-e4p/actions/workflows/build.yml/badge.svg)](https://github.com/siliscar/kimiko-e4p/actions/workflows/build.yml)
 [![ESP32-S31](https://img.shields.io/badge/ESP32--S31-4.7%22_E--Ink-397568)](#硬件)
 [![License](https://img.shields.io/badge/license-按内容适用-24292f)](LICENSE)
 
-**[官网](https://kimiko.mantake.shop)** &nbsp;·&nbsp; **[下载固件](https://github.com/chopper1026/kimiko-e4p/releases/latest)** &nbsp;·&nbsp; **[网页刷机](https://kimiko.mantake.shop/flash)**<br>
-**[使用说明](https://kimiko.mantake.shop/docs/firmware/manual/)** &nbsp;·&nbsp; **[更新日志](docs/CHANGELOG.md)** &nbsp;·&nbsp; **[开发文档](#开发文档)**
+**[仓库](https://github.com/siliscar/kimiko-e4p)** &nbsp;·&nbsp; **[下载固件](https://github.com/siliscar/kimiko-e4p/releases/latest)**<br>
+**[更新日志](docs/CHANGELOG.md)** &nbsp;·&nbsp; **[开发文档](#开发文档)**
 
 <br>
 
@@ -40,15 +40,15 @@ kimiko 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，
 - **首页不只是一张封面。** 最近阅读、天气、阅读手账与留白自由组合；阅读记录汇入当月日历。
 - **翻页有不止一种方式。** 触摸、可配置按键与 BLE 翻页器；也可按需开启晃动翻页。
 
-这里介绍当前源码的能力，安装包以 [Release](https://github.com/chopper1026/kimiko-e4p/releases) 和对应[更新日志](docs/CHANGELOG.md)为准。功能的设备验证范围见[功能全景](docs/development/FEATURES.md)，不以预览图或编译成功代替实机验收。
+这里介绍当前源码的能力，安装包以 [Release](https://github.com/siliscar/kimiko-e4p/releases) 和对应[更新日志](docs/CHANGELOG.md)为准。功能的设备验证范围见[功能全景](docs/development/FEATURES.md)，不以预览图或编译成功代替实机验收。
 
 ## 快速开始
 
 ### 1. 安装固件
 
-确认设备是 **Metalio E-INK4 Plus / ESP32-S31**。在电脑端 Chrome 或 Edge 中打开[网页刷机页](https://kimiko.mantake.shop/flash)，连接 USB 数据线，核对所选固件的设备型号后按页面提示操作。刷写前先备份重要设置与阅读记录。
+确认设备是 **Metalio E-INK4 Plus / ESP32-S31**。从 [GitHub Releases](https://github.com/siliscar/kimiko-e4p/releases/latest) 下载完整 USB 刷机包，连接 USB 数据线，按包内说明操作。刷写前先备份重要设置与阅读记录。
 
-也可以在 [GitHub Releases](https://github.com/chopper1026/kimiko-e4p/releases/latest) 下载完整 USB 刷机包，按包内 `README.txt` 操作，并用 `SHA256SUMS` 核对文件。
+也可以在 [GitHub Releases](https://github.com/siliscar/kimiko-e4p/releases/latest) 下载完整 USB 刷机包，按包内 `README.txt` 操作，并用 `SHA256SUMS` 核对文件。
 
 <details>
 <summary>下载文件怎么选？</summary>
@@ -73,7 +73,7 @@ kimiko 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，
 
 从书架打开一本书。阅读时从屏幕底部上滑呼出工具栏，调整字体、排版和翻页方式。默认三键短按分别是上一页、工具栏、下一页，也可自行配置；新开书沿用记住的全屏偏好。
 
-更多操作见[在线使用说明](https://kimiko.mantake.shop/docs/firmware/manual/)。
+更多操作见 [docs/ 下的使用说明](docs/) 与 [更新日志](docs/CHANGELOG.md)。
 
 ## 功能一览
 
@@ -215,7 +215,7 @@ kimiko 在 [kiikoread](https://github.com/wegooo-cell/read-pico-reader) 与 [Min
 先安装并激活 **ESP-IDF v6.1**。ESP32-S31 仍是 preview 目标，以下 `idf.py` 命令都必须带 `--preview`。
 
 ```sh
-git clone https://github.com/chopper1026/kimiko-e4p.git
+git clone https://github.com/siliscar/kimiko-e4p.git
 cd kimiko-e4p
 
 . "$IDF_PATH/export.sh"
@@ -271,7 +271,7 @@ python3 tools/flash_fast.py prepare --build-dir build
 
 ## 反馈与贡献
 
-使用中遇到问题，或有新的想法，可以提交 [Issue](https://github.com/chopper1026/kimiko-e4p/issues) 或通过[官网反馈](https://kimiko.mantake.shop/feedback)联系维护者。请附设备型号、固件版本、复现步骤；分享日志前删去 WiFi 密码和其他私人信息。
+使用中遇到问题，或有新的想法，可以提交 [Issue](https://github.com/siliscar/kimiko-e4p/issues) 联系维护者。请附设备型号、固件版本、复现步骤；分享日志前删去 WiFi 密码和其他私人信息。
 
 代码贡献前请阅读[贡献指南](CONTRIBUTING.md)与[中文提交规范](docs/COMMIT_CONVENTION.md)。
 

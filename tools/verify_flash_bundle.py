@@ -68,7 +68,7 @@ def parse_partition_table(data: bytes) -> dict[str, tuple[int, int, int, int]]:
 
 # 发布仓库的 Pages 站点；打包写清单与校验清单共用这一份，避免两处漂移。
 # Pages origin of the release repository, shared by the feed writer and the validator so they cannot drift.
-PAGES_ORIGIN = "https://chopper1026.github.io/kimiko-e4p/"
+PAGES_ORIGIN = "https://siliscar.github.io/kimiko-e4p/"
 
 
 def check_archived_releases(folder: Path) -> list[dict]:

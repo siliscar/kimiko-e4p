@@ -69,8 +69,7 @@ bool pico_release_url_valid(const char *url) {
     // 升级源限定官方 HTTPS 站点或 menuconfig 填写的自建前缀，避免重定向泄漏或被替换为任意下载源。
     // Limit updates to the official HTTPS origins or the configured self-hosted prefix; do not follow arbitrary redirects.
     static const char *const prefixes[] = {
-        "https://kimiko.mantake.shop/files/firmware/ota/", "https://wegooo-cell.github.io/read-pico-reader/",
-        "https://chopper1026.github.io/kimiko-e4p/", PICO_OTA_EXTRA_ORIGIN
+        "https://siliscar.github.io/kimiko-e4p/", PICO_OTA_EXTRA_ORIGIN
     };
     if (!url || strlen(url) >= 256) return false;
     const char *name = NULL;

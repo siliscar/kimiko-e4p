@@ -1,11 +1,13 @@
 menu "Built-in components"
     config PICO_COMPONENT_API_ORIGIN
         string "HTTPS platform origin for built-in components (no trailing slash)"
-        default "https://kimiko.mantake.shop"
+        default ""
         help
             Weather uses only the platform proxy. Never configure a provider
             endpoint or put provider credentials in firmware. Public activation
             requires a configured platform and confirmed attribution/license.
+            Empty disables the built-in weather proxy until a self-hosted
+            platform origin is configured.
 endmenu
 
 # 触摸阈值与丢点诊断；诊断日志仅在排查构建启用。
@@ -118,12 +120,12 @@ menu "Online update (OTA)"
 
     config PICO_OTA_FEED_URL
         string "Primary manifest URL"
-        default "https://kimiko.mantake.shop/api/v2/ota/devices/kimiko-e4p/update.json"
+        default ""
         help
             设备优先读取的 JSON 清单地址。必须是 HTTPS，服务器不得重定向，
-            响应体不超过 8 KB。
+            响应体不超过 8 KB。留空则不启用联网升级检查。
             Primary manifest URL. Must be HTTPS, the server must not redirect,
-            and the body must stay under 8 KB.
+            and the body must stay under 8 KB. Empty disables online update.
 
     config PICO_OTA_FEED_FALLBACK_URL
         string "Fallback manifest URL"

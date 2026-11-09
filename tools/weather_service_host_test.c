@@ -12,6 +12,11 @@
 static time_t wall_time;
 static time_t weather_test_time(time_t *out) {if(out)*out=wall_time;return wall_time;}
 #define time weather_test_time
+// 天气源默认留空（固件未配置自建平台时不启用）；测试注入一个合法 HTTPS 源，
+// 只验证 URL 拼接与响应处理，不依赖任何真实后台。
+// The weather origin defaults to empty (disabled without a self-hosted platform); the test
+// injects a valid HTTPS origin to exercise URL assembly and response handling only.
+#define CONFIG_PICO_COMPONENT_API_ORIGIN "https://weather.test"
 #include "../main/services/weather_service.c"
 #undef time
 static void (*pending)(void *);
@@ -96,7 +101,7 @@ void wifi_transfer_stop(void){assert(worker);++stops;network_state=WIFI_TRANSFER
 int esp_crt_bundle_attach(void *p){(void)p;return 0;}
 esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t *c){
     assert(worker&&c->disable_auto_redirect&&c->crt_bundle_attach&&c->timeout_ms==6000&&c->is_async);
-    assert(!strncmp(c->url,"https://kimiko.mantake.shop/api/v2/components",strlen("https://kimiko.mantake.shop/api/v2/components")));
+    assert(!strncmp(c->url,"https://weather.test/api/v2/components",strlen("https://weather.test/api/v2/components")));
     struct FakeHttp *h=calloc(1,sizeof(*h));h->status=200;++requests;
     h->event_handler=c->event_handler;h->user_data=c->user_data;
     if(strstr(c->url,"/auto-location")) {

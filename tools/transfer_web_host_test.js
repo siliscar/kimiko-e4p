@@ -24,7 +24,7 @@ class Element {
   focus(){}
   click(){return this.onclick?.();}
   getContext(){return {setTransform(){},fillRect(){},drawImage(){},fillText(){}};}
-  getBoundingClientRect(){return {width:260,right:600,bottom:200};}
+  getBoundingClientRect(){return {width:260,top:0,right:600,bottom:200};}
   setPointerCapture(){}
   toBlob(resolve){assert.equal(this.width,684);assert.equal(this.height,1216);resolve({size:120000});}
 }
@@ -48,7 +48,7 @@ async function setup(options={}) {
       return all.filter(el=>el.tagName==='button'||el.tagName==='input');
     }
   };
-  const state={gets:[],mutations:[],sent:[],signature:'慢慢阅读',signatures:[],infoReads:0};
+  const state={gets:[],mutations:[],sent:[],signature:'慢慢阅读',signatures:[],infoReads:0,clock:0,tick:null};
   const json=(body,status=200)=>({status,json:async()=>body});
   const fetch=async(url,request={})=>{
     if(url==='/signature'){
@@ -77,13 +77,16 @@ async function setup(options={}) {
     open(method,url){assert.equal(method,'PUT');this.url=url;}
     abort(){this.onabort();}
     send(file){
-      state.sent.push({url:this.url,file});this.upload.onprogress({loaded:file.size,total:file.size});
+      state.sent.push({url:this.url,file});
       const response=responses.shift()||{status:200,body:{ok:true}};
-      queueMicrotask(()=>{if(response.network)return this.onerror();this.status=response.status;this.responseText=response.invalidJson?'invalid':JSON.stringify(response.body);this.onload();});
+      const finish=()=>{if(response.network)return this.onerror();this.status=response.status;this.responseText=response.invalidJson?'invalid':JSON.stringify(response.body);this.onload();};
+      if(options.upload) options.upload({xhr:this,file,finish,state});
+      else { this.upload.onprogress({loaded:file.size,total:file.size}); queueMicrotask(finish); }
     }
   }
   class ImageMock{naturalWidth=1200;naturalHeight=1600;set src(value){this.url=value;queueMicrotask(()=>this.onload());}}
   const context=vm.createContext({document,fetch,XMLHttpRequest:XHR,TextEncoder,AbortController,setTimeout,clearTimeout,
+    performance:{now:()=>state.clock},setInterval:callback=>{state.tick=callback;return 1;},clearInterval:()=>{state.tick=null;},
     location:{host:'192.168.4.1',hash:''},innerWidth:1440,innerHeight:900,window:{addEventListener(){},scrollTo(){}},Image:ImageMock,
     confirm:()=>confirmations.length?confirmations.shift():true,URL:{createObjectURL:()=> 'blob:test',revokeObjectURL(){}},console});
   // 查询参数使用标准 URL；页面内仅需要对象 URL 接口。/ Parse queries with standard URL; the page needs only object URLs.
@@ -188,8 +191,45 @@ async function edit(t,action,name){
   t.get('selectAll').checked=true;t.get('selectAll').onchange();t.get('deleteSelected').onclick();await t.context.submitEditor();
   assert.equal(t.get('editor').open,true);assert.match(t.get('editorError').textContent,/readme.txt/);await t.context.submitEditor();
   assert.deepEqual(t.state.mutations.map(item=>item.path),['books','readme.txt','readme.txt']);assert.equal(t.get('editor').open,false);
-  t=await setup();await t.context.sendFiles(Array.from({length:41},(_,i)=>file(i+'.txt',1)),'file','');assert.equal(t.run('records.length'),40);
-  assert.equal(t.run('records[39].name'),'40.txt');assert.equal(t.run('records.every(record=>record.file===null)'),true);
+  t=await setup();await t.context.sendFiles(Array.from({length:41},(_,i)=>file(i+'.txt',1)),'file','');assert.equal(t.run('records.length'),41);
+  assert.equal(t.run('records[40].name'),'40.txt');assert.equal(t.run('records.every(record=>record.file===null)'),true);
+  assert.equal(t.get('queueList').children.length,41);assert.match(t.get('queueList').children[0].textContent,/0.txt/);
+  await t.context.sendFiles([file('下一批.txt',1)],'file','');assert.equal(t.run('records.length'),41);
+  assert.equal(t.run('records[0].name'),'1.txt');assert.equal(t.run('records[40].name'),'下一批.txt');
+  // 大批次上传时可查看完整队列；进度刷新不能重建列表或打断滚动。
+  // Full batches stay inspectable; progress updates must preserve rows and scroll position.
+  const pending=[];
+  t=await setup({upload:request=>pending.push(request)});
+  const batch=t.context.sendFiles(Array.from({length:24},(_,i)=>file('字体'+String(i+1).padStart(2,'0')+'.ttf',1048576)),'font','fonts');
+  await flush();
+  assert.equal(t.get('queueList').children.length,24);assert.equal(t.get('expandQueue').disabled,false);
+  assert.equal(t.get('queueFollow').disabled,false);assert.equal(t.get('search').disabled,false);assert.equal(t.get('sort').disabled,false);
+  assert.equal(t.get('chooseFiles').disabled,true);assert.equal(t.get('newFolder').disabled,true);
+  assert.equal(t.get('queueCurrentName').textContent,'字体01.ttf');assert.equal(t.get('queuePosition').textContent,'第 1 / 24 项');
+  t.get('expandQueue').onclick();assert.equal(t.get('expandQueue').attributes['aria-expanded'],'true');
+  t.get('sort').onclick();assert.equal(t.run('descending'),true);assert.equal(t.state.sent.length,1);
+  const firstRow=t.get('queueList').children[0];t.get('queueList').scrollTop=150;
+  t.state.clock=1000;pending[0].xhr.upload.onprogress({loaded:262144,total:1048576});
+  assert.equal(t.get('queueSpeed').textContent,'256 KB/s');assert.equal(t.get('queueCurrentDetail').textContent,'256 KB / 1.0 MB · 25%');
+  assert.equal(t.get('queueList').children[0],firstRow);assert.equal(t.get('queueList').scrollTop,150);
+  t.state.clock=4500;t.state.tick();assert.equal(t.get('queueSpeed').textContent,'0 B/s');
+  pending[0].xhr.upload.onprogress({loaded:1048575,total:1048576});
+  assert.equal(t.run('records[0].progress'),99);assert.equal(t.get('queueState').textContent,'正在上传');
+  pending[0].xhr.upload.onprogress({loaded:1048576,total:1048576});
+  assert.equal(t.get('queueState').textContent,'等待设备确认');assert.equal(t.get('queueSpeed').textContent,'—');
+  assert.equal(t.run('records[0].status'),'uploading');
+  pending[0].finish();await flush();await flush();
+  assert.equal(t.get('queuePosition').textContent,'第 2 / 24 项');assert.equal(t.get('queueCurrentName').textContent,'字体02.ttf');
+  assert.equal(t.get('queueList').scrollTop,150);assert.match(t.get('queueProcessed').textContent,/已处理 1 \/ 24/);
+  for(let i=1;i<24;i++) {
+    pending[i].xhr.upload.onprogress({loaded:1048576,total:1048576});
+    if(i===23) assert.equal(t.get('queueProgress').attributes['aria-valuenow'],'99');
+    pending[i].finish();await flush();await flush();
+  }
+  await batch;
+  assert.equal(t.state.sent.length,24);assert.equal(t.state.tick,null);assert.equal(t.get('queueState').textContent,'本批完成');
+  assert.equal(t.get('queueProgress').attributes['aria-valuenow'],'100');assert.match(t.get('queueSummary').textContent,/已完成 24/);
+  t.get('clearQueue').onclick();assert.equal(t.get('transferQueue').hidden,true);assert.equal(t.run('activeBatch.length'),0);
   t=await setup({mode:'sta'});t.get('wallpaperFile').files=[file('photo.heic',3000000)];t.get('wallpaperFile').onchange();await flush();
   assert.equal(t.get('wallpaperSend').disabled,false);t.get('cropZoom').value='1.5';t.get('cropZoom').oninput();
   const before=t.run('[cropX,cropY]');t.get('cropPreview').onpointerdown({pointerId:1,clientX:100,clientY:100});

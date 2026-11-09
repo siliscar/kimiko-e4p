@@ -102,7 +102,7 @@ static bool app_reading_journal_flush_stub(void){++flush_calls;return true;}
 #define app_reading_journal_flush app_reading_journal_flush_stub
 static void ui_nav_status(uint8_t *f){
     ui_text_fixed_vc(f,36,40,28,"08:30",EPD_DRAW_ALIGN_LEFT,false);
-    ui_text_fixed_vc(f,342,40,26,"mogo",EPD_DRAW_ALIGN_CENTER,false);
+    ui_text_fixed_vc(f,342,40,26,"kimiko",EPD_DRAW_ALIGN_CENTER,false);
     ui_text_fixed_vc(f,648,40,28,"86%",EPD_DRAW_ALIGN_RIGHT,false);
 }
 static void ui_nav_request(app_ctx_t *ctx,int tab){(void)ctx;nav=tab;}

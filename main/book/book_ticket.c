@@ -284,7 +284,7 @@ bool book_ticket_draw(uint8_t *fb, bool reader_background) {
     cover_background_draw(fb, gray);
     ticket_shadow_draw(fb);
     ticket_paper_draw(fb);
-    ui_text(fb, 82, 98, 28, "mogo  /  阅读票根", EPD_DRAW_ALIGN_LEFT, false);
+    ui_text(fb, 82, 98, 28, "kimiko  /  阅读票根", EPD_DRAW_ALIGN_LEFT, false);
     ui_hairline(fb, 156, 82, 520, UI_GRAY_BLACK);
     ticket_heading(fb,202,64,50,title);
     if (author[0]) ticket_heading(fb,274,44,28,author);

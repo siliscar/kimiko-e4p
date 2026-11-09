@@ -1,6 +1,6 @@
 {
   "schema_version": 1,
-  "project": "mogo-e4p",
+  "project": "kimiko-e4p",
   "commit_policy": "adapt",
   "commit_guide": "docs/COMMIT_CONVENTION.md",
   "docs_root": "docs/development",

@@ -434,7 +434,7 @@ static esp_err_t start(bool downloading) {
     xSemaphoreGive(s_mutex);
     state(downloading ? PICO_UPDATE_DOWNLOADING : PICO_UPDATE_CHECKING,
           downloading ? "正在下载，短暂断网会自动重连" : "正在连接并检查更新");
-    if (xTaskCreate(worker, "mogo_ota", 12288, NULL, 4, NULL) != pdPASS) {
+    if (xTaskCreate(worker, "kimiko_ota", 12288, NULL, 4, NULL) != pdPASS) {
         xSemaphoreTake(s_mutex, portMAX_DELAY); s_status->busy = false; xSemaphoreGive(s_mutex);
         state(PICO_UPDATE_FAILED, "内存不足，无法开始升级"); return ESP_ERR_NO_MEM;
     }

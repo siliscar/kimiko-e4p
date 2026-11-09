@@ -19,7 +19,7 @@
 #define CAP BOOK_STORE_PATH_MAX
 #define MAX_NODES 1000
 #define MAX_DEPTH 12
-#define JOURNAL ".mogo-category-op"
+#define JOURNAL ".kimiko-category-op"
 typedef struct { uint32_t magic, tree, size, checksum; char old[CAP], next[CAP]; } intent_t;
 static void *buffer(size_t n) {
 #ifdef ESP_PLATFORM

@@ -112,7 +112,7 @@ typedef enum {WIFI_TRANSFER_MODE_AP,WIFI_TRANSFER_MODE_STA} wifi_transfer_mode_t
 typedef enum {WIFI_TRANSFER_STOPPED,WIFI_TRANSFER_STARTING,WIFI_TRANSFER_READY,WIFI_TRANSFER_UPLOADING,WIFI_TRANSFER_ERROR} wifi_transfer_state_t;
 typedef struct {wifi_transfer_mode_t mode;bool network_only;const char* root_dir;bool is_flash;size_t file_limit;uint64_t(*free_bytes_cb)(void*);void* free_bytes_ctx;bool(*title_get_cb)(const char*,char*,size_t);int(*title_set_cb)(const char*,const char*);int(*file_changed_cb)(const char*);void(*file_deleted_cb)(const char*);void(*file_moved_cb)(const char*,const char*,uint32_t);void(*directory_deleted_cb)(const char*);void(*directory_moved_cb)(const char*,const char*);bool(*wallpaper_set_cb)(const char*);bool(*signature_get_cb)(char*,size_t);int(*signature_set_cb)(const char*);} wifi_transfer_cfg_t;
 typedef struct {wifi_transfer_mode_t mode;wifi_transfer_state_t state;bool wifi_configured,network_ready;char ssid[33],wifi_ssid[33],url[64],cur_name[241];unsigned sta_count,done_count,changed_count;size_t cur_bytes,cur_total;int last_error;} wifi_transfer_status_t;
-#define WIFI_TRANSFER_PASSWORD "mogo1234"
+#define WIFI_TRANSFER_PASSWORD "kimiko1234"
 static wifi_transfer_status_t test_status;
 static bool test_busy;
 static int test_save_error;

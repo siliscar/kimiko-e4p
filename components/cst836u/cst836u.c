@@ -285,8 +285,8 @@ esp_err_t cst836u_get_info(cst836u_handle_t h, cst836u_info_t* info) {
 }
 
 #if defined(CONFIG_IDF_TARGET_ESP32S31)
-// FT 原始坐标 → Mogo 逻辑坐标；盖板三键归一化到 x=80/240/400、y=1500。
-// FT raw coordinates -> Mogo logical coordinates; cover keys normalise to x=80/240/400, y=1500.
+// FT 原始坐标 → Kimiko 逻辑坐标；盖板三键归一化到 x=80/240/400、y=1500。
+// FT raw coordinates -> Kimiko logical coordinates; cover keys normalise to x=80/240/400, y=1500.
 static bool ft6336u_map_point(int raw_x, int raw_y, uint16_t* lx, uint16_t* ly) {
     if (raw_y >= FT6336U_VK_RAW_Y - FT6336U_VK_TOL &&
         raw_y <= FT6336U_VK_RAW_Y + FT6336U_VK_TOL) {

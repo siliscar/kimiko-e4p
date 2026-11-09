@@ -1,6 +1,0 @@
-interface:
-  display_name: "E4P 快速刷机"
-  short_description: "仅用于 mogo-e4p：限时刷入当前产品应用，保留设置、书籍与备用固件"
-  default_prompt: "使用 $mogo-e4p-flash 将当前代码刷入 E4P，按脚本 180 秒上限执行并说明实际结果。"
-policy:
-  allow_implicit_invocation: true

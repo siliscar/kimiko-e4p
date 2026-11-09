@@ -71,7 +71,7 @@ static void settings_write_close(nvs_handle_t handle) {
 #define NVS_KEY_TSYNC_AT "tsync_at"
 #define NVS_KEY_TSYNC_TRY "tsync_try"
 #define NVS_KEY_DEVICE_NAME "dev_name"
-#define DEFAULT_DEVICE_NAME "mogo"
+#define DEFAULT_DEVICE_NAME "kimiko"
 #define NVS_KEY_AVATAR "dev_avatar"
 #define NVS_KEY_STATUS_SIGNATURE "status_sig"
 #define NVS_KEY_TOUCH_HAPTIC "touch_haptic"

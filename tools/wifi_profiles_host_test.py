@@ -14,7 +14,7 @@ ROOT = Path(__file__).resolve().parents[1]
 
 
 def main():
-    with tempfile.TemporaryDirectory(prefix="mogo-wifi-profiles-") as directory:
+    with tempfile.TemporaryDirectory(prefix="kimiko-wifi-profiles-") as directory:
         work = Path(directory)
         env, compiler = toolchain(work)
         flags = ["-std=gnu11", "-Wall", "-Wextra", "-Werror", "-Wno-deprecated-declarations",

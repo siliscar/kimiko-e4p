@@ -16,7 +16,7 @@ CONFIG_TINYUSB_MSC_MOUNT_PATH="/sdcard"
 
 # M2 已接入 UI：开机不再跑面板测试图案，直接进开机图。
 # M2 brings up the UI: no boot test pattern; go straight to the splash.
-# CONFIG_MOGO_EPD_TEST_PATTERN is not set
+# CONFIG_KIMIKO_EPD_TEST_PATTERN is not set
 
 # Metalio：FT6336U INT=GPIO5，TCA9555 INT=GPIO2（S3 原板为 43/41）。
 # Metalio: FT6336U INT=GPIO5, TCA9555 INT=GPIO2 (the S3 board used 43/41).

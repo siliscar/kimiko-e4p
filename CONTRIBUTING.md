@@ -1,6 +1,6 @@
 # Contributing
 
-Contributions to mogo firmware, board support, drivers, tools, and documentation are welcome. Issues and pull requests may be written in English, Simplified Chinese, or Japanese. Keep each PR focused on one problem; discuss major behavior or hardware changes in an issue first.
+Contributions to kimiko firmware, board support, drivers, tools, and documentation are welcome. Issues and pull requests may be written in English, Simplified Chinese, or Japanese. Keep each PR focused on one problem; discuss major behavior or hardware changes in an issue first.
 
 ## Contribution licenses / 贡献许可
 

@@ -25,7 +25,7 @@ code=r'''
 #include "ui_kit.h"
 // 关机文案会取设备名；被测源的 #include 被剥离，这里补上桩定义。
 // The shutdown line reads the device name; includes are stripped, so stub it here.
-const char *app_settings_device_name(void) { return "Mogo"; }
+const char *app_settings_device_name(void) { return "Kimiko"; }
 #define W 684
 #define H 1216
 static uint8_t fb[W*H/2],before[sizeof(fb)];
@@ -103,7 +103,7 @@ int main(int argc,char **argv){
  }
 }
 '''
-with tempfile.TemporaryDirectory(prefix='mogo-power-',dir='/private/tmp') as folder:
+with tempfile.TemporaryDirectory(prefix='kimiko-power-',dir='/private/tmp') as folder:
     c,binary=Path(folder)/'test.c',Path(folder)/'test';c.write_text(code)
     subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-g','-fsanitize=address,undefined',
         '-I'+str(ROOT/'tools/ui_gesture_stubs'),'-I'+str(ROOT/'main/ui'),str(c),'-o',str(binary)],check=True)

@@ -16,8 +16,8 @@ jobs:
     container: espressif/idf:v6.1
     env:
       RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
-      PLATFORM_URL: ${{ vars.MOGO_PLATFORM_URL }}
-      PLATFORM_TOKEN: ${{ secrets.MOGO_FIRMWARE_SUBMISSION_TOKEN }}
+      PLATFORM_URL: ${{ vars.KIMIKO_PLATFORM_URL }}
+      PLATFORM_TOKEN: ${{ secrets.KIMIKO_FIRMWARE_SUBMISSION_TOKEN }}
     steps:
       - uses: actions/checkout@v4
         with:
@@ -144,7 +144,7 @@ jobs:
         shell: bash
         run: |
           set -eu
-          case "$PLATFORM_URL" in https://*) ;; *) echo 'MOGO_PLATFORM_URL must be HTTPS' >&2; exit 1;; esac
+          case "$PLATFORM_URL" in https://*) ;; *) echo 'KIMIKO_PLATFORM_URL must be HTTPS' >&2; exit 1;; esac
           test -n "$PLATFORM_TOKEN"
           curl --fail-with-body --silent --show-error --retry 3 --retry-delay 3 \
             -H "Authorization: Bearer $PLATFORM_TOKEN" \

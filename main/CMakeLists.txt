@@ -1,7 +1,7 @@
 # 产品只支持 S31；在组件依赖解析时拒绝其他目标，避免使用不匹配的板级配置。
 # The product supports S31 only; reject other targets during dependency discovery before selecting incompatible board settings.
 if(NOT IDF_TARGET STREQUAL "esp32s31")
-    message(FATAL_ERROR "mogo E-INK4 Plus requires IDF_TARGET=esp32s31")
+    message(FATAL_ERROR "kimiko E-INK4 Plus requires IDF_TARGET=esp32s31")
 endif()
 
 set(main_requires

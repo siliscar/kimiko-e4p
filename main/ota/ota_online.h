@@ -12,7 +12,7 @@
 #include <stdint.h>
 #include "esp_err.h"
 
-#define PICO_OTA_LAYOUT "mogo-e4p-dual-5m-v1"
+#define PICO_OTA_LAYOUT "kimiko-e4p-dual-5m-v1"
 #define PICO_OTA_BOARD "METALIO-EINK4P"
 #define PICO_OTA_CAPABILITY "PICO_HTTPS_OTA_V1"
 // 升级源在 menuconfig 中配置；宿主测试不带 sdkconfig，回落到当前正式站点。
@@ -20,7 +20,7 @@
 #ifdef CONFIG_PICO_OTA_FEED_URL
 #define PICO_OTA_FEED_URL CONFIG_PICO_OTA_FEED_URL
 #else
-#define PICO_OTA_FEED_URL "https://mogo.mantake.shop/api/v2/ota/devices/mogo-e4p/update.json"
+#define PICO_OTA_FEED_URL "https://kimiko.mantake.shop/api/v2/ota/devices/kimiko-e4p/update.json"
 #endif
 #ifdef CONFIG_PICO_OTA_FEED_FALLBACK_URL
 #define PICO_OTA_FEED_FALLBACK_URL CONFIG_PICO_OTA_FEED_FALLBACK_URL

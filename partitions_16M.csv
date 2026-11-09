@@ -1,4 +1,4 @@
-# ESP32-S31 16 MB 分区表：5 MB OTA x2 + ~6.04 MB FAT storage（Mogo /flash）+ 末尾 32 KB nvs。
+# ESP32-S31 16 MB 分区表：5 MB OTA x2 + ~6.04 MB FAT storage（Kimiko /flash）+ 末尾 32 KB nvs。
 # ESP32-S31 16 MB layout: dual 5 MB OTA slots, a ~6.04 MB FAT storage partition and a 32 KB tail nvs.
 #
 # 冻结：nvs 必须留在 0x9000-0x10000 头部之外。单文件整机镜像（idf.py merge-bin）按地址连续

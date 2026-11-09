@@ -38,13 +38,13 @@ User-visible changes by release; see [README](../README.md) for usage.
 - 移除文件管理单目录最多96项的固定限制，列表按需使用外部内存；内存不足时明确提示，不再静默显示不完整目录。/ Remove the file manager's fixed 96-entry directory limit with an on-demand PSRAM list; report insufficient memory instead of silently showing an incomplete directory.
 - 页眉页脚设置收紧标题下方留白，首屏同时显示六个内容槽位；高度调节与恢复默认仍通过滑动访问。/ Reduce whitespace below the header/footer settings title, showing all six content slots together; height controls and reset remain accessible by scrolling.
 - 优化电量显示：依据连续采样修正中段相对曲线，修复插拔时负载补偿反向，普通区间每分钟最多变化 1%；完善重启保存、判满采样连续性和低电量尾数处理。低段仍待整周期验证，不改变硬件充电及欠压保护。/ Improve battery display with sampled midrange estimates, signed load compensation, normal-range 1% per minute steps, restart checkpoints, continuous full confirmation and empty-level settling. Full-cycle low-range validation remains pending; hardware charging and undervoltage protection are unchanged.
-- 默认头像改为压缩后的 mogo logo，默认锁屏与开机准备画面共用同一张 684×1216 logo 图片，移除旧文字锁屏及独立 init-loading 资源；保留自定义头像和壁纸。/ Use the compressed mogo logo for default avatars and one shared 684x1216 logo image for fallback lock and startup screens, removing the old text art and separate init-loading asset while preserving custom avatars and wallpapers.
+- 默认头像改为压缩后的 kimiko logo，默认锁屏与开机准备画面共用同一张 684×1216 logo 图片，移除旧文字锁屏及独立 init-loading 资源；保留自定义头像和壁纸。/ Use the compressed kimiko logo for default avatars and one shared 684x1216 logo image for fallback lock and startup screens, removing the old text art and separate init-loading asset while preserving custom avatars and wallpapers.
 - 本地快速刷机脚本默认及最大时限由 110 秒放宽到 180 秒，保留 10 秒失败清理、活动应用分区限定、完整校验与启动确认。/ Extend the local fast-flash helper's default/maximum deadline from 110 to 180 seconds, preserving ten-second cleanup, active-app-only writes, complete verification and boot confirmation.
 - 修复设备时间偏差导致正常天气被拒收：预报校验、跨日显示和自动刷新使用可信 HTTPS 响应的服务器时间及单调计时，保留原始有效期和异常检查，不修改系统时钟或 RTC；宿主回归通过，未刷机验收。/ Fix normal weather rejection caused by device-clock skew using trusted HTTPS server time plus monotonic elapsed time for validation, day selection and refresh, preserving original expiry and anomaly checks without setting the system clock or RTC; host regressions passed, with device acceptance pending.
 
 ## v1.0.4 · 本地测试 / Local testing · 2026-11-04
 
-- 固件与传书网页品牌统一为 `mogo`，默认设备名为 `mogo`、热点名为 `mogo-XXXX`、口令为 `mogo1234`；启动及恢复配置时迁移历史默认设备名，保留自定义名称与旧备份兼容。/ Rebrand the firmware and transfer page as `mogo`, with device default `mogo`, hotspot `mogo-XXXX` and password `mogo1234`; migrate historical default names on boot/restore while preserving custom names and backup compatibility.
+- 固件与传书网页品牌统一为 `kimiko`，默认设备名为 `kimiko`、热点名为 `kimiko-XXXX`、口令为 `kimiko1234`；启动及恢复配置时迁移历史默认设备名，保留自定义名称与旧备份兼容。/ Rebrand the firmware and transfer page as `kimiko`, with device default `kimiko`, hotspot `kimiko-XXXX` and password `kimiko1234`; migrate historical default names on boot/restore while preserving custom names and backup compatibility.
 - 阅读手账替换全部旧像素插画，改为沿途有书、街角书店、纸上花园、月面观测站、唱片聆听角和灯塔书屋；保持六图轮换、同日选择保存及原有布局，空记录也使用当前插画。/ Replace all old journal illustrations with Books Along The Way, Corner Bookshop, Paper Garden, Moon Observatory, Vinyl Listening Corner and Lighthouse Library, preserving six-scene rotation, saved choices and layout; empty journals use the current scene too.
 
 ## v1.0.4 · 2026-11-04
@@ -80,7 +80,7 @@ User-visible changes by release; see [README](../README.md) for usage.
 
 ## v1.0.2 · 本地测试 / Local testing · 2026-11-02
 
-- 修正天气正式接口为 `https://mogo.mantake.shop`，同步 OTA 平台地址说明；OTA 主源与下载校验保持使用该平台。/ Correct the production weather origin to `https://mogo.mantake.shop` and align OTA documentation with the existing platform feed and download validation.
+- 修正天气正式接口为 `https://kimiko.mantake.shop`，同步 OTA 平台地址说明；OTA 主源与下载校验保持使用该平台。/ Correct the production weather origin to `https://kimiko.mantake.shop` and align OTA documentation with the existing platform feed and download validation.
 - 天气城市搜索改用平台官方 CSV 城市字典，支持中文、英文、拼音及首字母，完整结果分页并展示市、省归属；预报统一按官方地点 ID 共享六小时缓存，自动定位直接返回中文，不再逐次查询和风修正名称。本地开发旧选城格式不迁移。/ Use the persistent official city dictionary with bilingual/Pinyin/initial search, full pagination and administrative labels; share six-hour forecasts by official ID and return Chinese IP results directly, without repeated Geo relabeling or development-format migration.
 - 修正官方字母数字地点 ID 的校验，避免部分台湾地点能搜到却无法选择或保存。/ Accept official alphanumeric location IDs so listed Taiwan locations can be selected and persisted.
 
@@ -213,8 +213,8 @@ User-visible changes by release; see [README](../README.md) for usage.
 
 ## v1.0.0 · 本地测试 / Local testing · 2026-10-27
 
-- 联网升级改为使用 Mogo 平台的 E4P 固件清单和下载地址，继续验证设备型号、分区、镜像大小与 SHA-256。
-  Online updates use the Mogo platform E4P feed and download origin, retaining board, layout, size and SHA-256 checks.
+- 联网升级改为使用 Kimiko 平台的 E4P 固件清单和下载地址，继续验证设备型号、分区、镜像大小与 SHA-256。
+  Online updates use the Kimiko platform E4P feed and download origin, retaining board, layout, size and SHA-256 checks.
 
 - 恢复设置页「系统升级」入口，并将固件内部版本号统一为 `1.0.0`；本地 OTA 验证可通过独立构建配置连接测试平台。
   Restore the system-upgrade entry and use `1.0.0` as the embedded version; isolated build configuration supports local OTA testing.

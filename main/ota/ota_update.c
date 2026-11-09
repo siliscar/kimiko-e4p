@@ -23,7 +23,7 @@
 #include "esp_partition.h"
 #include "esp_system.h"
 
-static const char *TAG = "mogo_ota";
+static const char *TAG = "kimiko_ota";
 
 static void set_message(char *out, size_t size, const char *text) {
     if (!out || !size) return;
@@ -86,7 +86,7 @@ esp_err_t pico_ota_inspect(const char *path, pico_ota_info_t *info) {
     esp_err_t err = read_candidate(file, &header, &candidate);
     fclose(file);
     if (err != ESP_OK) {
-        set_message(info->message, sizeof(info->message), "升级包不是有效的 mogo 固件");
+        set_message(info->message, sizeof(info->message), "升级包不是有效的 kimiko 固件");
         return err;
     }
 
@@ -96,7 +96,7 @@ esp_err_t pico_ota_inspect(const char *path, pico_ota_info_t *info) {
                     sizeof(running_desc->project_name)) ||
         !copy_field(candidate_project, sizeof(candidate_project), candidate.project_name,
                     sizeof(candidate.project_name)) || strcmp(current_project, candidate_project) != 0) {
-        set_message(info->message, sizeof(info->message), "升级包不属于当前 mogo 固件");
+        set_message(info->message, sizeof(info->message), "升级包不属于当前 kimiko 固件");
         return ESP_ERR_INVALID_RESPONSE;
     }
     if (!copy_field(info->candidate_version, sizeof(info->candidate_version), candidate.version,

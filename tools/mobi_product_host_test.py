@@ -54,7 +54,7 @@ int main(void){
  puts("PASS: MOBI/TXT/EPUB transfer moves preserve progress and latest path; deletes clear state; unrelated files stay untouched");
 }
 '''
-with tempfile.TemporaryDirectory(prefix='mogo-mobi-product-') as directory:
+with tempfile.TemporaryDirectory(prefix='kimiko-mobi-product-') as directory:
     source, executable = Path(directory) / 'test.c', Path(directory) / 'test'
     source.write_text(unit)
     compiler = os.environ.get('CC', 'cc')

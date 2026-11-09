@@ -2109,7 +2109,7 @@ esp_err_t wifi_transfer_start(const wifi_transfer_cfg_t *cfg) {
     if (cfg->mode == WIFI_TRANSFER_MODE_AP) {
         uint8_t mac[6];
         err = esp_read_mac(mac, ESP_MAC_WIFI_SOFTAP); if (err != ESP_OK) goto fail;
-        snprintf((char *)wifi.ap.ssid, sizeof(wifi.ap.ssid), "mogo-%02X%02X", mac[4], mac[5]);
+        snprintf((char *)wifi.ap.ssid, sizeof(wifi.ap.ssid), "kimiko-%02X%02X", mac[4], mac[5]);
         strcpy((char *)wifi.ap.password, WIFI_TRANSFER_PASSWORD);
         wifi.ap.ssid_len = strlen((char *)wifi.ap.ssid);
         wifi.ap.max_connection = 4; wifi.ap.authmode = WIFI_AUTH_WPA2_PSK;

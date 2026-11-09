@@ -193,7 +193,7 @@ static void adapter_checks(uint8_t *fb,const char *directory){
     uint32_t target=s_category_ui.destination;assert(book_collection_find(&s_collection,target));
     char path_a[288],path_c[288];copy(path_a,sizeof(path_a),s_shelf[0].path);copy(path_c,sizeof(path_c),s_shelf[2].path);
     s_shelf[0].selected=s_shelf[1].selected=true;s_shelf[0].new_book=true;s_category_ui.command=CATEGORY_MOVE;
-    char prefix[288];copy(prefix,sizeof(prefix),s_collection.prefix);copy(s_collection.prefix,sizeof(s_collection.prefix),"/missing-mogo-test/library");
+    char prefix[288];copy(prefix,sizeof(prefix),s_collection.prefix);copy(s_collection.prefix,sizeof(s_collection.prefix),"/missing-kimiko-test/library");
     category_tick(&ctx);assert(s_view==CATEGORIES&&selected_count()==2&&!book_collection_assignment(&s_collection,s_shelf[0].path));
     assert(s_category_ui.notice[0]);copy(s_collection.prefix,sizeof(s_collection.prefix),prefix);s_category_ui.command=CATEGORY_MOVE;
     category_tick(&ctx);assert(s_view==SHELF&&!selected_count()&&!s_shelf[0].new_book&&book_collection_assignment(&s_collection,s_shelf[0].path)==target);

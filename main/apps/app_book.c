@@ -1577,7 +1577,7 @@ static void draw_import(uint8_t* fb) {
     static const char *titles[] = {"浏览 TF 卡", "WiFi 传书", "热点传书", "USB 读卡"};
     static const char *details[] = {
         "查看目录，打开或管理已有图书", "手机与墨水屏连接同一网络",
-        "连接 mogo 热点后上传图书", "连接电脑，把图书放入 books 文件夹"
+        "连接 kimiko 热点后上传图书", "连接电脑，把图书放入 books 文件夹"
     };
     for (int i = 0; i < 4; ++i) {
         EpdRect r = import_rect(i);
@@ -4874,7 +4874,7 @@ static bool shelf_collection_load(bool retry) {
     if (sd.present && (!sd.mounted || !sd.identity[0])) return false;
     if (book_store_prepare_data() != ESP_OK) return false;
     char prefix[BOOK_STORE_PATH_MAX];
-    snprintf(prefix,sizeof(prefix),"/flash/.mogo-shelf-%s",sd.mounted?sd.identity:"builtin");
+    snprintf(prefix,sizeof(prefix),"/flash/.kimiko-shelf-%s",sd.mounted?sd.identity:"builtin");
     if (!strcmp(s_collection.prefix,prefix) && !retry) return s_collection.ready;
     if (strcmp(s_collection.prefix,prefix)) {
         book_shelf_categories_dispose(&s_shelf_categories);

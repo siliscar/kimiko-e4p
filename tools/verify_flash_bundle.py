@@ -1,5 +1,5 @@
 #!/usr/bin/env python3
-"""Validate the public mogo web-flashing bundle."""
+"""Validate the public kimiko web-flashing bundle."""
 
 from __future__ import annotations
 
@@ -11,14 +11,14 @@ import re
 from pathlib import Path
 
 
-# 本仓库对应的设备与布局：Mogo E4P（ESP32-S31，16 MB，5 MB 双槽）。
-# Device and layout for this repository: Mogo E4P (ESP32-S31, 16 MB, dual 5 MB slots).
+# 本仓库对应的设备与布局：Kimiko E4P（ESP32-S31，16 MB，5 MB 双槽）。
+# Device and layout for this repository: Kimiko E4P (ESP32-S31, 16 MB, dual 5 MB slots).
 # 打包与校验共用这一份，布局变化只改这里；校验仍按显式期望值卡住意外布局。
 # Packaging and validation share this block, so a layout change edits one place; validation stays
 # an explicit expectation gate rather than trusting whatever was built.
 LAYOUT = {
     "board": "METALIO-EINK4P",
-    "layout": "mogo-e4p-dual-5m-v1",
+    "layout": "kimiko-e4p-dual-5m-v1",
     "project": "Read_Pico",
     "chip_id": 0x20,
     "chip_family": "ESP32-S31",
@@ -68,7 +68,7 @@ def parse_partition_table(data: bytes) -> dict[str, tuple[int, int, int, int]]:
 
 # 发布仓库的 Pages 站点；打包写清单与校验清单共用这一份，避免两处漂移。
 # Pages origin of the release repository, shared by the feed writer and the validator so they cannot drift.
-PAGES_ORIGIN = "https://chopper1026.github.io/mogo-e4p/"
+PAGES_ORIGIN = "https://chopper1026.github.io/kimiko-e4p/"
 
 
 def check_archived_releases(folder: Path) -> list[dict]:

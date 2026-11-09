@@ -11,7 +11,7 @@ static void fixture(bool home) {
     s_sd = (board_sd_info_t){.present=true, .mounted=true, .space_valid=true,
         .filesystem_bytes=32ULL*1024*1024*1024, .capacity_bytes=32ULL*1024*1024*1024,
         .free_bytes=26ULL*1024*1024*1024};
-    const char *root[] = {"books", "fonts", "pictures", "mogo-e4p-update-1.0.3.bin",
+    const char *root[] = {"books", "fonts", "pictures", "kimiko-e4p-update-1.0.3.bin",
         "随手记.txt", "阅读清单.txt", "随笔.txt", "音乐笔记.txt"};
     const char *books[] = {"瓦尔登湖.epub", "月亮与六便士.epub", "山茶文具店.epub", "小王子.epub",
         "城南旧事.txt", "人间草木.epub", "苏东坡传.epub", "夜航船.txt", "万物有灵且美.epub",

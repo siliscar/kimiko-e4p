@@ -187,7 +187,7 @@ int main(void){
       "or two slots per gesture with a latch, clamps at both ends and pushes only the 642 px viewport");
 }
 '''
-with tempfile.TemporaryDirectory(prefix='mogo-title-style-scroll-') as directory:
+with tempfile.TemporaryDirectory(prefix='kimiko-title-style-scroll-') as directory:
     path = Path(directory) / 'sheet.c'
     binary = path.with_suffix('')
     path.write_text(unit)

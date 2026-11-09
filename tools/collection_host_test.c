@@ -61,7 +61,7 @@ static void book(book_shelf_entry_t *b, const char *root, const char *leaf) {
     memset(b, 0, sizeof(*b)); snprintf(b->path, sizeof(b->path), "%s/%s", root, leaf); b->search_match = true;
 }
 int main(void) {
-    char directory[] = "/tmp/mogo-collections-XXXXXX"; assert(mkdtemp(directory));
+    char directory[] = "/tmp/kimiko-collections-XXXXXX"; assert(mkdtemp(directory));
     char root[288], prefix[288], second[288], folder[288];
     snprintf(root, sizeof(root), "%s/books", directory); assert(!mkdir(root, 0700));
     snprintf(prefix, sizeof(prefix), "%s/library-card-a", directory);

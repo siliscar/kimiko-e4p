@@ -113,7 +113,7 @@ def main():
     parser = argparse.ArgumentParser()
     parser.add_argument('--sample', type=Path)
     args = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix='mogo-mobi-') as temp:
+    with tempfile.TemporaryDirectory(prefix='kimiko-mobi-') as temp:
         folder = Path(temp)
         exe = compile_test(folder)
         for compression, encoding, hybrid in [(1,65001,False), (2,65001,False), (2,1252,False), (2,65001,True)]:

@@ -909,7 +909,7 @@ static void render(app_ctx_t* ctx, uint8_t* fb) {
     ui_draw_round_rect(fb, connection, 24, UI_GRAY_BLACK);
     char name[64];
     snprintf(name, sizeof(name), "%s", s_mode == WIFI_TRANSFER_MODE_AP ? s_status.ssid : s_status.wifi_ssid);
-    if (!name[0]) snprintf(name, sizeof(name), "%s", s_mode == WIFI_TRANSFER_MODE_AP ? "mogo 热点" : "已保存的 WiFi");
+    if (!name[0]) snprintf(name, sizeof(name), "%s", s_mode == WIFI_TRANSFER_MODE_AP ? "kimiko 热点" : "已保存的 WiFi");
     fit_label(name, 26, 420);
     ui_text(fb, 66, 190, 26, name, EPD_DRAW_ALIGN_LEFT, false);
     ui_text(fb, 66, 236, 19,
@@ -936,7 +936,7 @@ static void render(app_ctx_t* ctx, uint8_t* fb) {
             ui_fill_round_rect(fb, tab, 18, (s_qr_url == (i == 1)) ? 0x42 : UI_GRAY_WHITE);
             ui_draw_round_rect(fb, tab, 18, 0x92);
             ui_text_vc(fb, tab.x + tab.width / 2, tab.y + tab.height / 2, 21,
-                       i ? "打开传书网页" : "连接 mogo 热点", EPD_DRAW_ALIGN_CENTER, s_qr_url == (i == 1));
+                       i ? "打开传书网页" : "连接 kimiko 热点", EPD_DRAW_ALIGN_CENTER, s_qr_url == (i == 1));
         }
     } else {
         ui_text_vc(fb, 342, 602, url_px,

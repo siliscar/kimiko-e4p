@@ -1,7 +1,7 @@
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **mogo-e4p** (16298 symbols, 32232 relationships, 517 execution flows).
+This project is indexed by GitNexus as **kimiko-e4p** (16298 symbols, 32232 relationships, 517 execution flows).
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 
@@ -25,10 +25,10 @@ This project is indexed by GitNexus as **mogo-e4p** (16298 symbols, 32232 relati
 
 | Resource | Use for |
 | --- | --- |
-| `gitnexus://repo/mogo-e4p/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/mogo-e4p/clusters` | All functional areas |
-| `gitnexus://repo/mogo-e4p/processes` | All execution flows |
-| `gitnexus://repo/mogo-e4p/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/kimiko-e4p/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/kimiko-e4p/clusters` | All functional areas |
+| `gitnexus://repo/kimiko-e4p/processes` | All execution flows |
+| `gitnexus://repo/kimiko-e4p/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

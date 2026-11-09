@@ -38,7 +38,7 @@ CI 只证明能编译；真机时序与行为仍须设备验证。/ CI proves co
 
 ### 版本号与本地测试 / Versions and local tests
 
-用户 2026-11-05 要求放宽脚本时限，取代此前两分钟总预算；本仓库必须优先使用项目级 [mogo-e4p-flash skill](.agents/skills/mogo-e4p-flash/SKILL.md) 和 `python3 tools/flash_fast.py flash --yes`。脚本默认及上限改为 180 秒，可用 `--timeout 1..180` 缩短本次时限。刷机阶段不重复全量测试、索引或全片备份，不使用固定活动槽地址，不自动退回整机擦写；新功能在开发构建阶段先用 `prepare --build-dir` 准备当前产品构建。冷构建、设备异常或兼容性检查失败时及时停止说明，不刷旧包或虚报成功；超过时限的准备/恢复需另行说明并获授权。skill 仅放在本仓库 `.agents/skills/`，不安装到全局。设计/测试工具不代表刷机授权。
+用户 2026-11-05 要求放宽脚本时限，取代此前两分钟总预算；本仓库必须优先使用项目级 [kimiko-e4p-flash skill](.agents/skills/kimiko-e4p-flash/SKILL.md) 和 `python3 tools/flash_fast.py flash --yes`。脚本默认及上限改为 180 秒，可用 `--timeout 1..180` 缩短本次时限。刷机阶段不重复全量测试、索引或全片备份，不使用固定活动槽地址，不自动退回整机擦写；新功能在开发构建阶段先用 `prepare --build-dir` 准备当前产品构建。冷构建、设备异常或兼容性检查失败时及时停止说明，不刷旧包或虚报成功；超过时限的准备/恢复需另行说明并获授权。skill 仅放在本仓库 `.agents/skills/`，不安装到全局。设计/测试工具不代表刷机授权。
 The user's 2026-11-05 request to relax the script deadline supersedes the two-minute total budget. Use the repository-scoped skill and helper, now defaulting to a 180-second maximum; `--timeout 1..180` can shorten a run. Prepare known product builds during development and omit redundant tests/indexing/full-flash backups during flash-only work. Never hardcode the active slot, fall back to whole-device writes, substitute stale firmware or claim failure as success. Longer preparation/recovery needs separate authorization; tool creation/testing does not authorize flashing.
 
 快速刷机使用官方 S31 RAM stub，不回退到已复现连续读取故障的 ROM 读取接口。180 秒中预留最后 10 秒清理：失败且未写入或已完整校验时，若尚未尝试启动，应复位并确认原应用/首页恢复；仅关闭串口不算恢复。部分写入未校验时不启动未知应用，不自动重刷；已尝试启动仍失败时不循环复位，按实际状态报告。
@@ -58,18 +58,18 @@ For each OTA version tag, summarize actual changes since the appropriate previou
 
 ### 正式版发布 / Official releases
 
-用户 2026-11-03 确认：今后提到「发布版本」，均指发布到本仓库当前 `origin` 远端，替代此前固定的旧发布仓库；发布前核对 `git remote get-url origin`，当前为 `chopper1026/mogo-e4p`。推送代码，创建并推送对应版本的 Git tag，触发 OTA 网站的固件草稿构建与提交，并在同一远端创建 GitHub Release。附上经验证的 TF/OTA 应用 Bin、完整 USB 刷机包、SHA-256 校验值和简要更新日志；所有附件与 OTA 提交必须来自同一次正式构建。OTA 草稿仍须管理员审核发布，不得把草稿提交成功视为已经上线。
-Per the user's 2026-11-03 decision, "publish a version" means publishing to this repository's current `origin`, replacing the previously fixed legacy release repository. Check `git remote get-url origin` before publishing; it currently points to `chopper1026/mogo-e4p`. Push the code and a matching Git tag to trigger the OTA website's draft build/submission, and create a GitHub Release in the same remote repository. Attach the verified TF/OTA application Bin, complete USB flash bundle, SHA-256 checksums and brief release notes; all attachments and the OTA submission must come from the same official build. OTA drafts still require administrator review and publication; successful submission does not mean they are live.
+用户 2026-11-03 确认：今后提到「发布版本」，均指发布到本仓库当前 `origin` 远端，替代此前固定的旧发布仓库；发布前核对 `git remote get-url origin`，当前为 `chopper1026/kimiko-e4p`。推送代码，创建并推送对应版本的 Git tag，触发 OTA 网站的固件草稿构建与提交，并在同一远端创建 GitHub Release。附上经验证的 TF/OTA 应用 Bin、完整 USB 刷机包、SHA-256 校验值和简要更新日志；所有附件与 OTA 提交必须来自同一次正式构建。OTA 草稿仍须管理员审核发布，不得把草稿提交成功视为已经上线。
+Per the user's 2026-11-03 decision, "publish a version" means publishing to this repository's current `origin`, replacing the previously fixed legacy release repository. Check `git remote get-url origin` before publishing; it currently points to `chopper1026/kimiko-e4p`. Push the code and a matching Git tag to trigger the OTA website's draft build/submission, and create a GitHub Release in the same remote repository. Attach the verified TF/OTA application Bin, complete USB flash bundle, SHA-256 checksums and brief release notes; all attachments and the OTA submission must come from the same official build. OTA drafts still require administrator review and publication; successful submission does not mean they are live.
 
 用户 2026-11-04 确认 GitHub Release 的展示与命名规范如下；`<版本号>` 不含 `v`，Git tag 仍使用 `v<版本号>`（例如 `v1.0.3`）。
 Per the user's 2026-11-04 decision, use the following GitHub Release presentation and naming rules. `<version>` excludes `v`; Git tags remain `v<version>` (for example, `v1.0.3`).
 
 | 项目 / Item | 格式 / Format | 1.0.3 示例 / Example |
 | --- | --- | --- |
-| Release 标题 / Release title | `mogo E4p <版本号>` / `mogo E4p <version>` | `mogo E4p 1.0.3` |
-| TF/OTA 应用镜像 / TF/OTA application | `mogo-e4p-update-<版本号>.bin` / `mogo-e4p-update-<version>.bin` | `mogo-e4p-update-1.0.3.bin` |
-| USB 单文件整机镜像 / Single-file USB image | `mogo-e4p-<版本号>-full.bin` / `mogo-e4p-<version>-full.bin` | `mogo-e4p-1.0.3-full.bin` |
-| 完整 USB 刷机包 / Complete USB bundle | `mogo-e4p-<版本号>-usb.zip` / `mogo-e4p-<version>-usb.zip` | `mogo-e4p-1.0.3-usb.zip` |
+| Release 标题 / Release title | `kimiko E4p <版本号>` / `kimiko E4p <version>` | `kimiko E4p 1.0.3` |
+| TF/OTA 应用镜像 / TF/OTA application | `kimiko-e4p-update-<版本号>.bin` / `kimiko-e4p-update-<version>.bin` | `kimiko-e4p-update-1.0.3.bin` |
+| USB 单文件整机镜像 / Single-file USB image | `kimiko-e4p-<版本号>-full.bin` / `kimiko-e4p-<version>-full.bin` | `kimiko-e4p-1.0.3-full.bin` |
+| 完整 USB 刷机包 / Complete USB bundle | `kimiko-e4p-<版本号>-usb.zip` / `kimiko-e4p-<version>-usb.zip` | `kimiko-e4p-1.0.3-usb.zip` |
 
 Release 说明按更新日志、下载、验证组织，下载文件名与实际附件、包外 `README.txt`、`SHA256SUMS` 保持一致，保留 `release-provenance.json` 构建来源。保留当前目标硬件与刷写方式说明，不再添加「不适用于旧ESP32-S3设备」一句。以上仅调整 GitHub Release 的标题、下载文件名及说明，不改变固件界面品牌、目标硬件、构建部件名、备份文件名、内部协议或官网/OTA 地址；未经用户明确要求，不更名或替换已经发布的附件。
 Organize Release descriptions as updates, downloads and verification. Keep download names consistent across assets, the outer `README.txt` and `SHA256SUMS`, and retain build provenance in `release-provenance.json`. Describe the current target hardware and flashing methods without adding the old ESP32-S3 exclusion sentence. These rules affect only GitHub Release titles, download filenames and descriptions, not firmware UI branding, hardware targets, build component names, backup filenames, internal protocols or website/OTA URLs. Do not rename or replace published assets without an explicit user request.
@@ -211,8 +211,8 @@ Defined in [`main/app/app.h`](main/app/app.h). The loop presents via `app_presen
 
 ## 硬约束 / Hard rules
 
-- 用户 2026-11-04 明确将固件与项目品牌统一改为小写 `mogo`，取代此前品牌决策；设备默认名、热点前缀、固件界面与传书网页均使用 `mogo`。仅迁移历史默认设备名，保留用户自定义名称；热点口令为满足 WPA2 长度要求的 `mogo1234`。网页设备仍称「墨水屏」，页面底色保持明亮纯白；GitHub Release 的标题和下载文件名继续按上述发布规范执行。源码与新版本发布使用本仓库当前 `origin`（现为 `chopper1026/mogo-e4p`）；保留已发布下载/OTA 地址、备份文件名、内部协议标识以及历史许可标识和真实版权声明。天气和 OTA 的正式接口域名仍为 `mogo.mantake.shop`，保留 GitHub OTA 回退源。
-  Per the user's 2026-11-04 rebranding decision, use lowercase `mogo` for the firmware and project, including default device names, hotspot prefixes, firmware UI and transfer pages. Migrate only historical default device names, preserving custom names; use `mogo1234` for the WPA2 hotspot password. Keep the bright-white website and device label “墨水屏”, existing Release naming rules, current `origin`, published download/OTA URLs, backup names, protocol identifiers, historical license identifiers and accurate copyright notices. Weather and OTA continue using `mogo.mantake.shop`, with the GitHub OTA fallback retained.
+- 用户 2026-11-04 明确将固件与项目品牌统一改为小写 `kimiko`，取代此前品牌决策；设备默认名、热点前缀、固件界面与传书网页均使用 `kimiko`。仅迁移历史默认设备名，保留用户自定义名称；热点口令为满足 WPA2 长度要求的 `kimiko1234`。网页设备仍称「墨水屏」，页面底色保持明亮纯白；GitHub Release 的标题和下载文件名继续按上述发布规范执行。源码与新版本发布使用本仓库当前 `origin`（现为 `chopper1026/kimiko-e4p`）；保留已发布下载/OTA 地址、备份文件名、内部协议标识以及历史许可标识和真实版权声明。天气和 OTA 的正式接口域名仍为 `kimiko.mantake.shop`，保留 GitHub OTA 回退源。
+  Per the user's 2026-11-04 rebranding decision, use lowercase `kimiko` for the firmware and project, including default device names, hotspot prefixes, firmware UI and transfer pages. Migrate only historical default device names, preserving custom names; use `kimiko1234` for the WPA2 hotspot password. Keep the bright-white website and device label “墨水屏”, existing Release naming rules, current `origin`, published download/OTA URLs, backup names, protocol identifiers, historical license identifiers and accurate copyright notices. Weather and OTA continue using `kimiko.mantake.shop`, with the GitHub OTA fallback retained.
 
 `冻结 / Frozen:` 段落是产品决策，不是建议。改行为前必须先改这段，并说明为什么决策变了。
 
@@ -263,7 +263,7 @@ Every comment is bilingual. Comments only; no logic changes.
 <!-- gitnexus:start -->
 # GitNexus — Code Intelligence
 
-This project is indexed by GitNexus as **mogo-e4p** (16298 symbols, 32232 relationships, 517 execution flows).
+This project is indexed by GitNexus as **kimiko-e4p** (16298 symbols, 32232 relationships, 517 execution flows).
 
 > Index stale? Run `node .gitnexus/run.cjs analyze --index-only` from the project root — it auto-selects an available runner. No `.gitnexus/run.cjs` yet? Bootstrap with `npx`, `bunx`, or `pnpm dlx` — e.g. `bunx gitnexus@latest analyze` (npm 11 npx crash; #1939).
 
@@ -287,10 +287,10 @@ This project is indexed by GitNexus as **mogo-e4p** (16298 symbols, 32232 relati
 
 | Resource | Use for |
 | --- | --- |
-| `gitnexus://repo/mogo-e4p/context` | Codebase overview, check index freshness |
-| `gitnexus://repo/mogo-e4p/clusters` | All functional areas |
-| `gitnexus://repo/mogo-e4p/processes` | All execution flows |
-| `gitnexus://repo/mogo-e4p/process/{name}` | Step-by-step execution trace |
+| `gitnexus://repo/kimiko-e4p/context` | Codebase overview, check index freshness |
+| `gitnexus://repo/kimiko-e4p/clusters` | All functional areas |
+| `gitnexus://repo/kimiko-e4p/processes` | All execution flows |
+| `gitnexus://repo/kimiko-e4p/process/{name}` | Step-by-step execution trace |
 
 ## CLI
 

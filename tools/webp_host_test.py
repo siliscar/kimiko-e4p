@@ -24,7 +24,7 @@ def main():
     parser = argparse.ArgumentParser(description=__doc__)
     parser.add_argument("epubs", nargs="*", type=Path)
     options = parser.parse_args()
-    with tempfile.TemporaryDirectory(prefix="mogo-webp-") as temp:
+    with tempfile.TemporaryDirectory(prefix="kimiko-webp-") as temp:
         work = Path(temp)
         (work / "sdkconfig.h").write_text(
             "#define CONFIG_JD_SZBUF 512\n#define CONFIG_JD_FORMAT 0\n"

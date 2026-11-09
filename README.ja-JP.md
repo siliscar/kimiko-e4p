@@ -1,4 +1,4 @@
-# mogo
+# kimiko
 
 > このリポジトリの対象は Metalio E-INK4 Plus（ESP32-S31）です。[開発ガイド](docs/ONBOARDING.md)、[コード構造](docs/ARCHITECTURE.md)、[テストツール](tools/README.md)を参照してください。以下の旧基板情報は現在のハードウェア・ビルド設定ではありません。
 
@@ -10,8 +10,8 @@
 
 > **利用条件：** 今後、新たな独自制作物に[個人学習ライセンス](licenses/kiikoread-Personal-Study-1.0.txt)を明示した場合、個人学習を許可し、別途書面による許諾のない商用利用を禁止します。**rc93 以前のコード・配布物、既存の Apache-2.0 の権利、第三者ライセンスは変更しません。** 適用範囲は [LICENSE](LICENSE) を参照してください。
 
-公開プロジェクト名は **mogo** です。Web サイトでは機器を「墨水屏」と表記し、GitHub URL・更新 URL・既存のバックアップ名は維持します。本体表示も mogo に統一します。白い公式サイトに画面プレビュー、機能紹介、版選択、Web USB 書き込み、Bin ダウンロードと[使用説明](flash/manual.html)を用意しました。`python3 tools/stage_public_flash.py _site` で公開ファイルを生成し、GitHub Pages / Cloudflare Pages の出力先を `_site` に設定できます。HTML と PDF は `docs/user-manual.zh-CN.json` から `tools/build_user_manual.py --font /path/to/a/static-CJK.ttf` で生成します（Python ReportLab が必要です）。
-正式 Bin は現在のリモートリポジトリの [GitHub Releases](https://github.com/chopper1026/mogo-e4p/releases) に公開します。バージョンタグを push すると、同一ビルドのファームウェアを OTA プラットフォームの下書きへ送信し、管理者の審査後に公開します。OTA は `https://mogo.mantake.shop/api/v2/ota/devices/mogo-e4p/update.json` を優先し、失敗時は従来の GitHub 更新元へ戻ります。公開済みの固定ダウンロード・更新 URL は維持します。
+公開プロジェクト名は **kimiko** です。Web サイトでは機器を「墨水屏」と表記し、GitHub URL・更新 URL・既存のバックアップ名は維持します。本体表示も kimiko に統一します。白い公式サイトに画面プレビュー、機能紹介、版選択、Web USB 書き込み、Bin ダウンロードと[使用説明](flash/manual.html)を用意しました。`python3 tools/stage_public_flash.py _site` で公開ファイルを生成し、GitHub Pages / Cloudflare Pages の出力先を `_site` に設定できます。HTML と PDF は `docs/user-manual.zh-CN.json` から `tools/build_user_manual.py --font /path/to/a/static-CJK.ttf` で生成します（Python ReportLab が必要です）。
+正式 Bin は現在のリモートリポジトリの [GitHub Releases](https://github.com/chopper1026/kimiko-e4p/releases) に公開します。バージョンタグを push すると、同一ビルドのファームウェアを OTA プラットフォームの下書きへ送信し、管理者の審査後に公開します。OTA は `https://kimiko.mantake.shop/api/v2/ota/devices/kimiko-e4p/update.json` を優先し、失敗時は従来の GitHub 更新元へ戻ります。公開済みの固定ダウンロード・更新 URL は維持します。
 
 
 [English](README.md) · [简体中文](README.zh-CN.md) · [Third-party notices](THIRD_PARTY_NOTICES.md)

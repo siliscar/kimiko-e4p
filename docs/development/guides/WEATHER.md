@@ -40,9 +40,9 @@ Fog and Haze use treetops obscured by low mist banks, without region-wide parall
 
 ## 平台接口 / Platform Contract
 
-`CONFIG_PICO_COMPONENT_API_ORIGIN` 配置可信 HTTPS 平台源，默认 `https://mogo.mantake.shop`，不带路径或末尾斜杠。仅访问该源的 `/api/v2/components` 及天气 `locations`、`auto-location`、`forecast` GET 接口。无 Cookie、设备注册或供应商密钥，不直连和风，不改变 OTA 下载源。
+`CONFIG_PICO_COMPONENT_API_ORIGIN` 配置可信 HTTPS 平台源，默认 `https://kimiko.mantake.shop`，不带路径或末尾斜杠。仅访问该源的 `/api/v2/components` 及天气 `locations`、`auto-location`、`forecast` GET 接口。无 Cookie、设备注册或供应商密钥，不直连和风，不改变 OTA 下载源。
 
-`CONFIG_PICO_COMPONENT_API_ORIGIN` is a trusted HTTPS origin, defaulting to `https://mogo.mantake.shop`, without a path/trailing slash. Only catalog and weather GET endpoints are used, without cookies, registration, provider credentials or direct QWeather calls. OTA sources are unchanged.
+`CONFIG_PICO_COMPONENT_API_ORIGIN` is a trusted HTTPS origin, defaulting to `https://kimiko.mantake.shop`, without a path/trailing slash. Only catalog and weather GET endpoints are used, without cookies, registration, provider credentials or direct QWeather calls. OTA sources are unchanged.
 
 产品配置使用系统可信证书束，不内置本地联调 CA；已移除联调用 USB 控制命令、页面/刷屏性能插桩及天气逐请求测时日志。独立开发证书、配置和测试包仅保留在忽略目录，不进入源码或已发布下载。
 

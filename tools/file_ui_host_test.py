@@ -53,7 +53,7 @@ static int app_settings_main_refresh_mode(void){return APP_MAIN_REFRESH_NORMAL;}
     code += r'''
 static void ui_nav_status(uint8_t *fb){
     checked_text(fb,36,40,28,"08:30",EPD_DRAW_ALIGN_LEFT,false);
-    checked_text(fb,342,40,26,"mogo",EPD_DRAW_ALIGN_CENTER,false);
+    checked_text(fb,342,40,26,"kimiko",EPD_DRAW_ALIGN_CENTER,false);
     checked_text(fb,592,40,28,"86%",EPD_DRAW_ALIGN_RIGHT,false);
     ui_draw_control_frame(fb,(EpdRect){604,28,40,24},3,0);
     ui_fill_rect_fast((EpdRect){609,33,26,14},0,fb);

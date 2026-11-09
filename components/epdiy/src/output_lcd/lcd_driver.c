@@ -356,8 +356,8 @@ static void init_ckv_rmt() {
     if (clk_err != ESP_OK || src_hz == 0) {
         src_hz = 80000000;
     }
-    // 目标 10 MHz 通道时钟：1 tick = 0.1us，与 Mogo 的行时序单位一致。
-    // Target a 10 MHz channel clock: 1 tick = 0.1 µs, matching Mogo's line-timing units.
+    // 目标 10 MHz 通道时钟：1 tick = 0.1us，与 Kimiko 的行时序单位一致。
+    // Target a 10 MHz channel clock: 1 tick = 0.1 µs, matching Kimiko's line-timing units.
     uint32_t chan_div = (src_hz + 5000000) / 10000000;
     if (chan_div < 1) {
         chan_div = 1;

@@ -44,7 +44,7 @@ for part, path in files.items():
     hashes[part] = hashlib.sha256(data).hexdigest()
     print(f'{part}: {len(data)} bytes, sha256={hashes[part]}')
 meta = {
-    'device': 'mogo-e4p', 'version': version,
+    'device': 'kimiko-e4p', 'version': version,
     'channel': 'beta' if '-rc' in version else 'stable',
     'repository': os.environ['GITHUB_REPOSITORY'], 'tag': os.environ['GITHUB_REF_NAME'],
     'commit': os.environ['GITHUB_SHA'], 'runId': os.environ['GITHUB_RUN_ID'],

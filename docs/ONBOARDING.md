@@ -1,7 +1,7 @@
 # 开发上手 / Developer onboarding
 
-本仓库维护 mogo 在 Metalio E-INK4 Plus（ESP32-S31）上的阅读固件。旧 S3 板和演示固件的历史设计不能作为当前构建或硬件参数。
-This repository maintains the mogo reader firmware for Metalio E-INK4 Plus (ESP32-S31). Historical S3/demo designs are not current build or hardware specifications.
+本仓库维护 kimiko 在 Metalio E-INK4 Plus（ESP32-S31）上的阅读固件。旧 S3 板和演示固件的历史设计不能作为当前构建或硬件参数。
+This repository maintains the kimiko reader firmware for Metalio E-INK4 Plus (ESP32-S31). Historical S3/demo designs are not current build or hardware specifications.
 
 ## 阅读顺序 / Reading order
 

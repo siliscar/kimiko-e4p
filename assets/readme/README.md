@@ -27,7 +27,7 @@ README 的天气展示城市固定为**上海**。天气工具的默认样例城
 
 `transfer.png` 是 [upload.html](../../components/wifi_transfer/upload.html) 在 Chromium 1360 × 900 视口下的截图，使用页面自身的内嵌样式、图标与交互脚本。
 
-复现时在浏览器拦截 `http://mogo-preview.test/` 并返回该 HTML，对以下只读请求返回样例 JSON，再点击「书籍」并截图；不要连接真实设备，也不发起上传、删除或保存：
+复现时在浏览器拦截 `http://kimiko-preview.test/` 并返回该 HTML，对以下只读请求返回样例 JSON，再点击「书籍」并截图；不要连接真实设备，也不发起上传、删除或保存：
 
 | 请求 | 样例响应 |
 | :-- | :-- |

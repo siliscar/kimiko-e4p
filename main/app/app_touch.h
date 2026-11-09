@@ -2,8 +2,8 @@
  * 中文：页面与手势共享的触摸快照，不包含芯片句柄；读取入口同步借用调用方上下文。
  * English: Chip-independent touch snapshots for pages and gestures; reads synchronously borrow caller context.
  */
-#ifndef MOGO_APP_TOUCH_H
-#define MOGO_APP_TOUCH_H
+#ifndef KIMIKO_APP_TOUCH_H
+#define KIMIKO_APP_TOUCH_H
 #include <stdbool.h>
 #include <stdint.h>
 

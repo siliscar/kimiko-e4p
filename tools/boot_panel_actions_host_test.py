@@ -118,7 +118,7 @@ int main(void) {
 }
 '''
 
-with tempfile.TemporaryDirectory(prefix='mogo-boot-panel-') as directory:
+with tempfile.TemporaryDirectory(prefix='kimiko-boot-panel-') as directory:
     work = Path(directory)
     (work/'freertos').mkdir()
     (work/'esp_attr.h').write_text('#define RTC_NOINIT_ATTR\n')

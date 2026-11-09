@@ -86,7 +86,7 @@ static void remove_tree(const char *p){DIR *d=opendir(p);if(!d){assert(!unlink(p
 static void failure_matrix(void) {
     unsigned injected=0;
     for(int failure=1;failure<=28;++failure) {
-        char root[]="/tmp/mogo-category-XXXXXX";assert(mkdtemp(root));char source[288],dest[288],old[288],next[288];
+        char root[]="/tmp/kimiko-category-XXXXXX";assert(mkdtemp(root));char source[288],dest[288],old[288],next[288];
         path(source,root,"source");path(dest,root,"target");assert(!mkdir(source,0700));assert(!mkdir(dest,0700));
         path(old,source,"sample.epub");path(next,dest,"sample.epub");file(old);memset(disk,0,sizeof(disk));fail_at=0;seed(old);
         book_progress_watch_t *watch=book_progress_watch_create(old);assert(watch);
@@ -110,7 +110,7 @@ int main(void) {
     for(size_t i=0;i<sizeof(invalid)/sizeof(*invalid);++i)assert(!book_category_name_valid(invalid[i]));
     char long_name[82];memset(long_name,'a',81);long_name[81]=0;assert(!book_category_name_valid(long_name));
     failure_matrix();
-    char root[]="/tmp/mogo-category-XXXXXX";assert(mkdtemp(root));char a[288],b[288],old[288],next[288];
+    char root[]="/tmp/kimiko-category-XXXXXX";assert(mkdtemp(root));char a[288],b[288],old[288],next[288];
     memset(disk,0,sizeof(disk));assert(!book_category_create(root,"文学",a));assert(exists(a));assert(book_category_create(root,"文学",b)==ESP_ERR_INVALID_STATE);
     assert(!book_category_rename(root,a,"文学",extra)&&!book_category_pending(root));
     assert(book_category_rename(NULL,a,"新名称",extra)==ESP_ERR_INVALID_ARG);
@@ -155,7 +155,7 @@ int main(void) {
     for(int i=0;i<13;++i){path(child,deep,"d");assert(!mkdir(child,0700));strcpy(deep,child);}
     assert(book_category_rename(root,flat,"不能改名",extra)==ESP_ERR_INVALID_SIZE&&exists(flat)&&!book_category_pending(root));
     // 坏日志禁止新写入；不会据此猜测路径或删除文件。/ Corrupt journals block mutations without guessing paths or deleting files.
-    path(temp,root,".mogo-category-op");file(temp);assert(book_category_recover(root,extra)==ESP_ERR_INVALID_STATE);
+    path(temp,root,".kimiko-category-op");file(temp);assert(book_category_recover(root,extra)==ESP_ERR_INVALID_STATE);
     assert(book_category_create(root,"禁止写入",flat)==ESP_ERR_INVALID_STATE);assert(exists(next));
     remove_tree(root);puts("category management: PASS (22 write/commit/erase failures, recovery, metadata, collisions, nested rename, non-destructive removal)");
 }

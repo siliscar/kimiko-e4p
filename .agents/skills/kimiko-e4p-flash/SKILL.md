@@ -1,11 +1,11 @@
 ---
-name: mogo-e4p-flash
+name: kimiko-e4p-flash
 description: 仅为本仓库 Metalio E-INK4 Plus / ESP32-S31 执行本地烧录、刷机、烧写最新代码或重新刷入固件，使用限时应用分区脚本。创建脚本或 skill 不授权刷机；不用于发布、联网 OTA、整机恢复或其他仓库。
 ---
 
 # E4P 快速刷机
 
-仅在当前 `mogo-e4p` checkout 使用。入口为 `tools/flash_fast.py`，禁止安装到用户级 skills 或复制到其他仓库。
+仅在当前 `kimiko-e4p` checkout 使用。入口为 `tools/flash_fast.py`，禁止安装到用户级 skills 或复制到其他仓库。
 Use only this checkout's helper; never install this skill globally or apply it to another repository.
 
 ## 时限 / Deadline

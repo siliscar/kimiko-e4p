@@ -151,7 +151,7 @@ int main(void){
  reset();ctx.request_app=true;present(&ctx,APP_REDRAW_AREA);assert(calls==0);ctx.request_app=false;
  puts("PASS: manual rc90/periodic complete GC16 each use one full output and no footer replay; ordinary turns, ripple, images, clock and cancellation unchanged");}
 '''
-with tempfile.TemporaryDirectory(prefix='mogo-reader-release-',dir='/private/tmp') as folder:
+with tempfile.TemporaryDirectory(prefix='kimiko-reader-release-',dir='/private/tmp') as folder:
  c=Path(folder)/'test.c';binary=Path(folder)/'test';c.write_text(unit)
  subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-Wno-unused-variable','-g',str(c),'-o',str(binary)],check=True)
  subprocess.run([str(binary)],check=True)

@@ -33,12 +33,12 @@ def package(build: Path, output: Path, notes: str | None = None):
     else:
         # 没有站点模板时生成最小可刷清单，便于只打包固件并交给外部平台。
         # Without a site template, synthesize a minimal flashable manifest for bundle-only staging.
-        manifest={'name':'mogo','new_install_prompt_erase':True,
+        manifest={'name':'kimiko','new_install_prompt_erase':True,
             'builds':[{'chipFamily':LAYOUT['chip_family'],'parts':[
                 {'path':name,'offset':EXPECTED[name][0]}
                 for name in ('bootloader.bin','partitions.bin','ota_data_initial.bin','firmware.bin')]}]}
     manifest['version']=version
-    manifest['name']='mogo'
+    manifest['name']='kimiko'
     manifest['updated_at']=datetime.now(ZoneInfo('Asia/Shanghai')).isoformat(timespec='seconds')
     manifest['pico_ota']={'layout':LAYOUT['layout'],'base_version':version,
         'minimum_base_version':LAYOUT['minimum_base_version'],

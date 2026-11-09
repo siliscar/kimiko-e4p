@@ -1,8 +1,8 @@
 <div align="center">
 
-<a href="https://mogo.mantake.shop"><img src="assets/image/mogo-logo.png" width="112" height="112" alt="mogo"></a>
+<a href="https://kimiko.mantake.shop"><img src="assets/image/kimiko-logo.png" width="112" height="112" alt="kimiko"></a>
 
-# mogo
+# kimiko
 
 ### 为 Metalio E-INK4 Plus 打造的阅读固件
 
@@ -12,17 +12,17 @@
 
 基于 [kiikoread](https://github.com/wegooo-cell/read-pico-reader) 开发。
 
-[![Release](https://img.shields.io/github/v/release/chopper1026/mogo-e4p?label=release&color=24292f)](https://github.com/chopper1026/mogo-e4p/releases/latest)
-[![Build](https://github.com/chopper1026/mogo-e4p/actions/workflows/build.yml/badge.svg)](https://github.com/chopper1026/mogo-e4p/actions/workflows/build.yml)
+[![Release](https://img.shields.io/github/v/release/chopper1026/kimiko-e4p?label=release&color=24292f)](https://github.com/chopper1026/kimiko-e4p/releases/latest)
+[![Build](https://github.com/chopper1026/kimiko-e4p/actions/workflows/build.yml/badge.svg)](https://github.com/chopper1026/kimiko-e4p/actions/workflows/build.yml)
 [![ESP32-S31](https://img.shields.io/badge/ESP32--S31-4.7%22_E--Ink-397568)](#硬件)
 [![License](https://img.shields.io/badge/license-按内容适用-24292f)](LICENSE)
 
-**[官网](https://mogo.mantake.shop)** &nbsp;·&nbsp; **[下载固件](https://github.com/chopper1026/mogo-e4p/releases/latest)** &nbsp;·&nbsp; **[网页刷机](https://mogo.mantake.shop/flash)**<br>
-**[使用说明](https://mogo.mantake.shop/docs/firmware/manual/)** &nbsp;·&nbsp; **[更新日志](docs/CHANGELOG.md)** &nbsp;·&nbsp; **[开发文档](#开发文档)**
+**[官网](https://kimiko.mantake.shop)** &nbsp;·&nbsp; **[下载固件](https://github.com/chopper1026/kimiko-e4p/releases/latest)** &nbsp;·&nbsp; **[网页刷机](https://kimiko.mantake.shop/flash)**<br>
+**[使用说明](https://kimiko.mantake.shop/docs/firmware/manual/)** &nbsp;·&nbsp; **[更新日志](docs/CHANGELOG.md)** &nbsp;·&nbsp; **[开发文档](#开发文档)**
 
 <br>
 
-<a href="assets/readme/overview.png"><img src="assets/readme/overview.png" width="900" alt="mogo 当前源码界面预览：天气组件、今日阅读记录和当月阅读日历"></a>
+<a href="assets/readme/overview.png"><img src="assets/readme/overview.png" width="900" alt="kimiko 当前源码界面预览：天气组件、今日阅读记录和当月阅读日历"></a>
 
 <sub>当前开发源码的宿主绘图预览，使用示例数据；不是实屏照片，也不代表已发布版本。<a href="assets/readme/README.md">图片来源</a></sub>
 
@@ -32,7 +32,7 @@
 
 ## 读书，也照顾阅读之外的小事
 
-mogo 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，基于 MindReset 阅读固件与 Metalio 板级实现适配，并非硬件厂商的官方固件。
+kimiko 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，基于 MindReset 阅读固件与 Metalio 板级实现适配，并非硬件厂商的官方固件。
 
 - **书放在自己手里。** 从 TF 卡读取 EPUB、TXT、传统 MOBI，在书架直接归类，搜索、收藏，接着上次的位置读；整理分类不搬动原文件。
 - **页面按自己的习惯来。** 字体、字号、间距、横竖排、章节题头、页眉页脚和阅读背景均可调整。
@@ -40,24 +40,24 @@ mogo 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，�
 - **首页不只是一张封面。** 最近阅读、天气、阅读手账与留白自由组合；阅读记录汇入当月日历。
 - **翻页有不止一种方式。** 触摸、可配置按键与 BLE 翻页器；也可按需开启晃动翻页。
 
-这里介绍当前源码的能力，安装包以 [Release](https://github.com/chopper1026/mogo-e4p/releases) 和对应[更新日志](docs/CHANGELOG.md)为准。功能的设备验证范围见[功能全景](docs/development/FEATURES.md)，不以预览图或编译成功代替实机验收。
+这里介绍当前源码的能力，安装包以 [Release](https://github.com/chopper1026/kimiko-e4p/releases) 和对应[更新日志](docs/CHANGELOG.md)为准。功能的设备验证范围见[功能全景](docs/development/FEATURES.md)，不以预览图或编译成功代替实机验收。
 
 ## 快速开始
 
 ### 1. 安装固件
 
-确认设备是 **Metalio E-INK4 Plus / ESP32-S31**。在电脑端 Chrome 或 Edge 中打开[网页刷机页](https://mogo.mantake.shop/flash)，连接 USB 数据线，核对所选固件的设备型号后按页面提示操作。刷写前先备份重要设置与阅读记录。
+确认设备是 **Metalio E-INK4 Plus / ESP32-S31**。在电脑端 Chrome 或 Edge 中打开[网页刷机页](https://kimiko.mantake.shop/flash)，连接 USB 数据线，核对所选固件的设备型号后按页面提示操作。刷写前先备份重要设置与阅读记录。
 
-也可以在 [GitHub Releases](https://github.com/chopper1026/mogo-e4p/releases/latest) 下载完整 USB 刷机包，按包内 `README.txt` 操作，并用 `SHA256SUMS` 核对文件。
+也可以在 [GitHub Releases](https://github.com/chopper1026/kimiko-e4p/releases/latest) 下载完整 USB 刷机包，按包内 `README.txt` 操作，并用 `SHA256SUMS` 核对文件。
 
 <details>
 <summary>下载文件怎么选？</summary>
 
 | 文件 | 用途 |
 | :-- | :-- |
-| `mogo-e4p-<版本号>-usb.zip` | 完整 USB 刷机包，包含操作说明、镜像与校验值 |
-| `mogo-e4p-<版本号>-full.bin` | USB 单文件整机镜像，使用对应版本说明中的刷写方式 |
-| `mogo-e4p-update-<版本号>.bin` | 设备升级用的应用镜像，不是整机镜像，不能当作完整 USB 包使用 |
+| `kimiko-e4p-<版本号>-usb.zip` | 完整 USB 刷机包，包含操作说明、镜像与校验值 |
+| `kimiko-e4p-<版本号>-full.bin` | USB 单文件整机镜像，使用对应版本说明中的刷写方式 |
+| `kimiko-e4p-update-<版本号>.bin` | 设备升级用的应用镜像，不是整机镜像，不能当作完整 USB 包使用 |
 
 已安装的用户可在设备设置中检查更新。首次安装或恢复设备时使用完整 USB 包，并按对应版本的说明操作。
 
@@ -67,13 +67,13 @@ mogo 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，�
 
 把 EPUB、TXT、传统 MOBI 放进 TF 卡的 `books/`。也可以进入设备的「文件管理」，选择 WiFi、热点或 USB 传输。MOBI 的支持范围见下方说明。
 
-热点传书时，连接 **`mogo-XXXX`**，默认口令 **`mogo1234`**，再打开设备屏幕显示的地址。手机和电脑均可使用；传输期间让墨水屏停留在传输页面。日常传书和离线阅读不需要访问外网。
+热点传书时，连接 **`kimiko-XXXX`**，默认口令 **`kimiko1234`**，再打开设备屏幕显示的地址。手机和电脑均可使用；传输期间让墨水屏停留在传输页面。日常传书和离线阅读不需要访问外网。
 
 ### 3. 开始阅读
 
 从书架打开一本书。阅读时从屏幕底部上滑呼出工具栏，调整字体、排版和翻页方式。默认三键短按分别是上一页、工具栏、下一页，也可自行配置；新开书沿用记住的全屏偏好。
 
-更多操作见[在线使用说明](https://mogo.mantake.shop/docs/firmware/manual/)。
+更多操作见[在线使用说明](https://kimiko.mantake.shop/docs/firmware/manual/)。
 
 ## 功能一览
 
@@ -115,7 +115,7 @@ mogo 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，�
 
 ### 传书，一个浏览器就够
 
-<a href="assets/readme/transfer.png"><img src="assets/readme/transfer.png" width="900" alt="mogo 传书网页预览：侧栏切换文件、壁纸和签名，中间浏览目录，右侧上传文件和查看传输记录"></a>
+<a href="assets/readme/transfer.png"><img src="assets/readme/transfer.png" width="900" alt="kimiko 传书网页预览：侧栏切换文件、壁纸和签名，中间浏览目录，右侧上传文件和查看传输记录"></a>
 
 <sub>当前传书网页的浏览器截图，文件与存储容量为示例数据，未连接真实设备。</sub>
 
@@ -155,6 +155,32 @@ mogo 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，�
 
 </details>
 
+## 基于 kiikoread 的优化
+
+kimiko 在 [kiikoread](https://github.com/wegooo-cell/read-pico-reader) 与 [MindReset](https://github.com/MindReset/read_pico_firmware) 的固件基础上，做了以下面向阅读体验与墨水屏表现的优化。这些改动是本项目独立维护的核心增量，均已通过宿主测试或真机验证。
+
+### 阅读体验
+
+- **电源轨自适应保持**：连续翻页窗口内电轨不断电，翻页免去每次 ~100–150ms 的上电序列；修复了「提示保持」被每帧刷屏清零的落地缺陷，连翻时电轨正确撑住。
+- **字体卡片位图缓存**：设置页字体样张整卡缓存，二次进入瞬时；根治字体卡片重绘对当前阅读字体的换脸干扰。
+- **插图页预解码**：下一页插图在空闲时预算内预解码，翻到插图页直接采用，免去翻页路径的全额解码。
+- **连翻触觉反馈**：翻页刷屏阻塞期间的点击按下沿同样回放震动，连翻不再「哑」；密集边沿收敛为不重叠单脉冲。
+- **反向/菜单键打断连翻队列**：连点同向翻页时，反向翻页或工具栏键能立即打断积压，不再等旧队列排空。
+
+### 墨水屏表现（图片发灰发淡 / 发糊三连修）
+
+- **插图推黑不再被二次裁掉**：修复水波纹基底对插图页又裁掉 4 相推黑的问题，灰阶中间调整体加深，白底黑线对比恢复。
+- **渐进式 JPEG 全分辨率解码**：引入 `stb_image` 全分辨率解码 SOF2 渐进式 JPEG（原解码器只解 DC 扫描、强制 1/8），图表 1px 框线、网格、坐标小字不再糊成一团。
+- **插图中间调 gamma 压深**：针对墨水屏 16 级灰阶中段物理偏亮，对插图灰度加 gamma=1.5 压深曲线，黑/白端点不动、中间调层次保留。
+
+### 其他
+
+- **触摸 INT 门控**：无触摸时跳过 I2C 轮询，空闲读 200/s 降到 10/s，降低待机电耗。
+- **MOBI 支持**：完整解析传统 MOBI（含 markup 变体）。
+- **死代码清理** 与大量宿主回归测试（`tools/` 下数十个 host_test 全绿）。
+
+完整的技术细节与验证方法见 [docs/CHANGELOG.md](docs/CHANGELOG.md) 与本地优化清单 `OPTIMIZATION.local.md`。
+
 ## 硬件
 
 | 项目 | 当前目标 |
@@ -189,8 +215,8 @@ mogo 是面向 **Metalio E-INK4 Plus（ESP32-S31）** 的独立阅读固件，�
 先安装并激活 **ESP-IDF v6.1**。ESP32-S31 仍是 preview 目标，以下 `idf.py` 命令都必须带 `--preview`。
 
 ```sh
-git clone https://github.com/chopper1026/mogo-e4p.git
-cd mogo-e4p
+git clone https://github.com/chopper1026/kimiko-e4p.git
+cd kimiko-e4p
 
 . "$IDF_PATH/export.sh"
 idf.py --preview set-target esp32s31
@@ -219,7 +245,7 @@ python3 tools/run_reader_baseline.py
 python3 tools/flash_fast.py prepare --build-dir build
 ```
 
-需要本地刷写且已确认目标设备与操作授权时，按[项目刷机说明](.agents/skills/mogo-e4p-flash/SKILL.md)执行 `python3 tools/flash_fast.py flash --yes`。脚本默认及上限为 180 秒，动态识别活动应用分区，不自动退回整机擦写。不要刷入旧包或把局部写入失败当作成功。
+需要本地刷写且已确认目标设备与操作授权时，按[项目刷机说明](.agents/skills/kimiko-e4p-flash/SKILL.md)执行 `python3 tools/flash_fast.py flash --yes`。脚本默认及上限为 180 秒，动态识别活动应用分区，不自动退回整机擦写。不要刷入旧包或把局部写入失败当作成功。
 
 本地测试沿用当前正式版本号，用日期和说明区分；产物留在忽略的构建目录，不覆盖已经发布的同版本文件。
 
@@ -245,13 +271,13 @@ python3 tools/flash_fast.py prepare --build-dir build
 
 ## 反馈与贡献
 
-使用中遇到问题，或有新的想法，可以提交 [Issue](https://github.com/chopper1026/mogo-e4p/issues) 或通过[官网反馈](https://mogo.mantake.shop/feedback)联系维护者。请附设备型号、固件版本、复现步骤；分享日志前删去 WiFi 密码和其他私人信息。
+使用中遇到问题，或有新的想法，可以提交 [Issue](https://github.com/chopper1026/kimiko-e4p/issues) 或通过[官网反馈](https://kimiko.mantake.shop/feedback)联系维护者。请附设备型号、固件版本、复现步骤；分享日志前删去 WiFi 密码和其他私人信息。
 
 代码贡献前请阅读[贡献指南](CONTRIBUTING.md)与[中文提交规范](docs/COMMIT_CONVENTION.md)。
 
 ## 致谢与许可
 
-特别感谢原项目 [kiikoread](https://github.com/wegooo-cell/read-pico-reader)，mogo 在其基础上继续开发与适配。
+kimiko 是一个独立维护的项目，基于原项目 [kiikoread](https://github.com/wegooo-cell/read-pico-reader) 继续开发与适配，并保留其版权声明（`LicenseRef-Kiikoread-Personal-Study-1.0`）。
 
 感谢 [MindReset](https://github.com/MindReset/read_pico_firmware) 的固件基础、Metalio 的 E-INK4 Plus 板级实现，以及 [epdiy](https://github.com/vroland/epdiy) 和其他上游项目。完整来源与许可见[第三方声明](THIRD_PARTY_NOTICES.md)。
 

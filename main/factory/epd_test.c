@@ -5,7 +5,7 @@
  * EPD bring-up 测试图案：灰阶、棋盘、细线、方向、边框与连续局刷。
  *
  * EPD bring-up test pattern: gray ramp, checkerboard, thin lines, orientation,
- * border and repeated partial updates. Enabled only by CONFIG_MOGO_EPD_TEST_PATTERN.
+ * border and repeated partial updates. Enabled only by CONFIG_KIMIKO_EPD_TEST_PATTERN.
  */
 
 #include "epd_test.h"

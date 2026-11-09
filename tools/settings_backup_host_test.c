@@ -336,8 +336,8 @@ static void test_home_regions_backup(void) {
 
 static void test_device_name_branding(void) {
     const struct { const char *stored; const char *expected; } cases[] = {
-        {NULL, "mogo"}, {"", "mogo"}, {"Pico", "mogo"}, {"kiikoread", "mogo"},
-        {"mogo", "mogo"}, {"My Reader", "My Reader"}, {"kiikoread-custom", "kiikoread-custom"}
+        {NULL, "kimiko"}, {"", "kimiko"}, {"Pico", "kimiko"}, {"kiikoread", "kimiko"},
+        {"kimiko", "kimiko"}, {"My Reader", "My Reader"}, {"kiikoread-custom", "kiikoread-custom"}
     };
     for (unsigned i = 0; i < sizeof(cases) / sizeof(cases[0]); ++i) {
         loaded_device_name = cases[i].stored;
@@ -358,11 +358,11 @@ static void test_device_name_branding(void) {
     }
     loaded_device_name = NULL;
     app_settings_init();
-    assert(!strcmp(app_settings_device_name(), "mogo"));
+    assert(!strcmp(app_settings_device_name(), "kimiko"));
 }
 
 int main(void) {
-    assert(!strcmp(app_settings_device_name(), "mogo"));
+    assert(!strcmp(app_settings_device_name(), "kimiko"));
     flash_failure = true;
     nvs_handle_t rejected = 0;
     assert(settings_write_open(&rejected) == ESP_ERR_INVALID_STATE && !flash_depth && !rejected);
@@ -1044,11 +1044,11 @@ int main(void) {
     assert(fclose(file) == 0);
     /* 彻底断电档已移除：旧备份里的 FULL 一律迁移为彻底关机。/ Full-off is retired: legacy FULL in backups migrates to full off. */
     assert(app_settings_backup_restore() == ESP_OK && s_shutdown_style == APP_SHUTDOWN_STAGED);
-    assert(!strcmp(app_settings_device_name(), "mogo"));
+    assert(!strcmp(app_settings_device_name(), "kimiko"));
     assert(!strcmp(app_settings_books_dir(),"/sdcard/books")&&!strcmp(app_settings_fonts_dir(),"/sdcard/fonts"));
     app_settings_init();
     assert(!strcmp(app_settings_books_dir(),"/sdcard/books")&&!strcmp(app_settings_fonts_dir(),"/sdcard/fonts"));
-    assert(!s_home_full_refresh && !strcmp(s_device_name, "mogo") && !s_status_signature[0]);
+    assert(!s_home_full_refresh && !strcmp(s_device_name, "kimiko") && !s_status_signature[0]);
     assert(!strcmp(saved_wifi.ssid, "Home_2.4G")); /* Old backups leave network alone. */
 
     /* Existing PICOSET2 backups remain readable, with centered guide lines. */

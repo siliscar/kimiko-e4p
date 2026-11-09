@@ -1,7 +1,7 @@
 menu "Built-in components"
     config PICO_COMPONENT_API_ORIGIN
         string "HTTPS platform origin for built-in components (no trailing slash)"
-        default "https://mogo.mantake.shop"
+        default "https://kimiko.mantake.shop"
         help
             Weather uses only the platform proxy. Never configure a provider
             endpoint or put provider credentials in firmware. Public activation
@@ -100,7 +100,7 @@ menu "Bring-up diagnostics"
             Enable only for resource diagnostics; disable for fixed-page timing
             comparisons so resource walks do not affect subsequent caches.
 
-    config MOGO_EPD_TEST_PATTERN
+    config KIMIKO_EPD_TEST_PATTERN
         bool "Run EPD test pattern at boot"
         default n
         help
@@ -118,7 +118,7 @@ menu "Online update (OTA)"
 
     config PICO_OTA_FEED_URL
         string "Primary manifest URL"
-        default "https://mogo.mantake.shop/api/v2/ota/devices/mogo-e4p/update.json"
+        default "https://kimiko.mantake.shop/api/v2/ota/devices/kimiko-e4p/update.json"
         help
             设备优先读取的 JSON 清单地址。必须是 HTTPS，服务器不得重定向，
             响应体不超过 8 KB。

@@ -10,7 +10,7 @@ from pathlib import Path
 from PIL import Image, ImageOps
 
 ROOT = Path(__file__).resolve().parents[1]
-SOURCE = ROOT / "assets/image/mogo-logo.png"
+SOURCE = ROOT / "assets/image/kimiko-logo.png"
 SCREEN = (684, 1216)
 AVATAR_SIDES = (60, 82)
 

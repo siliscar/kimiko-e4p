@@ -37,7 +37,7 @@ def main():
         for x in range(61, 620):
             src[y * W + x] = 176      # 浅灰网格线
 
-    with tempfile.TemporaryDirectory(prefix="mogo-progjpeg-") as temp:
+    with tempfile.TemporaryDirectory(prefix="kimiko-progjpeg-") as temp:
         work = Path(temp)
         (work / "sdkconfig.h").write_text(
             "#define CONFIG_JD_SZBUF 512\n#define CONFIG_JD_FORMAT 0\n"

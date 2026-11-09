@@ -147,7 +147,7 @@ int main(void){
  puts("PASS: actual generic gestures + restored settings handler/presenter: all three modes use one discrete step and one soft ordinary/original fast-water changed-gray update per swipe; no tracking, momentum, motion ink, extra release/idle frames or periodic full flash; content reaches actual navigation top; selectors and OTA remain");
 }
 '''
-with tempfile.TemporaryDirectory(prefix='mogo-settings-rollback-') as directory:
+with tempfile.TemporaryDirectory(prefix='kimiko-settings-rollback-') as directory:
     path=Path(directory)/'settings.c';binary=path.with_suffix('');path.write_text(unit)
     subprocess.run(['cc','-std=c11','-Wall','-Wextra','-Werror','-fsanitize=address,undefined',
                     '-I'+str(root/'tools/ui_gesture_stubs'),'-I'+str(root/'main/ui'),str(path),str(root/'main/ui/ui_gesture.c'),'-o',str(binary)],check=True)

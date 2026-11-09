@@ -1,0 +1,3 @@
+# CI 在 sdkconfig.defaults 之后加载，只叠加编译检查；硬件与产品配置保持一致。
+# Load after sdkconfig.defaults for compile checks; retain the same product hardware configuration.
+CONFIG_COMPILER_WARN_WRITE_STRINGS=y

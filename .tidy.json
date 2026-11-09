@@ -1,0 +1,47 @@
+{
+  "schema_version": 1,
+  "project": "mogo-e4p",
+  "commit_policy": "adapt",
+  "commit_guide": "docs/COMMIT_CONVENTION.md",
+  "docs_root": "docs/development",
+  "catalog_roots": [
+    "docs",
+    "tools/README.md",
+    "components/board_support/README.md",
+    "components/board_i2c/README.md",
+    "components/book_search/README.md",
+    "components/webp_decoder/README.md",
+    "components/device_power/README.md",
+    "components/device_power/docs",
+    "components/cst836u/README.md",
+    "components/fca9555/README.md",
+    "components/sc7a20h/README.md",
+    "components/e0470_epaper_waveform/README.md"
+  ],
+  "architecture": "docs/ARCHITECTURE.md",
+  "features": "docs/development/FEATURES.md",
+  "records_root": "docs/local/tidy/changes",
+  "process_root": "docs/local/tidy",
+  "history_visibility": "local",
+  "catalog": {
+    "asset_mode": "grouped"
+  },
+  "legacy_docs": {
+    "strategy": "migrate",
+    "status": "completed",
+    "migration_id": "20261104-e4p-docs",
+    "backup_ref": "git:tidy/doc-backups/20261104-e4p-docs"
+  },
+  "gitnexus": {
+    "required": true,
+    "mode": "index-only"
+  },
+  "governance": {
+    "revision": 3,
+    "fingerprint": "a932f0eb5019b15fc92dba2b4f32eaee296db5d98441d0eea98657d458130f78",
+    "managed_hashes": {
+      "AGENTS.md": "318a884851b2204599c687e309e7756c9e57d481300ef5dafcdef54d14765767"
+    },
+    "scope": "managed-blocks-only"
+  }
+}

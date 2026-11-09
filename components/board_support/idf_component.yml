@@ -1,0 +1,12 @@
+version: "1.0.0"
+description: "Board support: I2C, card storage, buzzer interfaces and EPD board definition"
+url: "https://github.com/mindreset/read_pico"
+repository: "https://github.com/mindreset/read_pico.git"
+issues: "https://github.com/mindreset/read_pico/issues"
+license: "Apache-2.0"
+tags:
+  - epd
+  - eink
+  - board
+dependencies:
+  idf: ">=5.3"

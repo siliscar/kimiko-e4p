@@ -1,0 +1,156 @@
+name: Build and submit OTA firmware
+on:
+  push:
+    tags: ['v*']
+  workflow_dispatch:
+    inputs:
+      tag:
+        description: Existing version tag to retry without moving it
+        required: true
+        type: string
+permissions:
+  contents: read
+jobs:
+  release:
+    runs-on: ubuntu-latest
+    container: espressif/idf:v6.1
+    env:
+      RELEASE_TAG: ${{ inputs.tag || github.ref_name }}
+      PLATFORM_URL: ${{ vars.MOGO_PLATFORM_URL }}
+      PLATFORM_TOKEN: ${{ secrets.MOGO_FIRMWARE_SUBMISSION_TOKEN }}
+    steps:
+      - uses: actions/checkout@v4
+        with:
+          ref: ${{ inputs.tag || github.ref }}
+      - name: Validate version tag
+        shell: bash
+        run: |
+          python3 - <<'PY'
+          import os, re
+          tag = os.environ['RELEASE_TAG']
+          if not re.fullmatch(r'v[0-9]{1,5}\.[0-9]{1,5}\.[0-9]{1,5}(?:-rc[0-9]{1,5})?', tag):
+              raise SystemExit('Unsupported release tag')
+          version = tag[1:]
+          if len(version) > 32 or any(int(n) > 65535 for n in re.findall(r'[0-9]+', version)):
+              raise SystemExit('Version components exceed device limits')
+          with open(os.environ['GITHUB_ENV'], 'a') as env:
+              env.write('PICO_PROJECT_VER=' + version + '\n')
+          PY
+      - name: Validate release notes
+        shell: bash
+        run: python3 tools/prepare_platform_submission.py --check-notes
+      - name: Build production firmware for ESP32-S31
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          idf.py --preview set-target esp32s31
+          idf.py --preview build
+          idf.py --preview size
+      - name: Verify LGPL relinking inputs
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          ninja -C build -t commands Read_Pico.elf | tail -n 1 > build/relink-command.sh
+          test -s build/relink-command.sh
+          cp build/Read_Pico.elf build/Read_Pico.original.elf
+          (cd build && bash relink-command.sh)
+          cmp build/Read_Pico.original.elf build/Read_Pico.elf
+          printf 'workspace=%s\nidf_path=%s\ncontainer=espressif/idf:v6.1\n' "$PWD" "$IDF_PATH" > build/relink-environment.txt
+          idf.py --version >> build/relink-environment.txt
+          riscv32-esp-elf-g++ --version >> build/relink-environment.txt
+          git -c safe.directory="$IDF_PATH" -C "$IDF_PATH" rev-parse HEAD >> build/relink-environment.txt
+      - name: Prepare strict host compiler
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends clang libclang-rt-dev libssl-dev zlib1g-dev nodejs
+          . "$IDF_PATH/export.sh"
+          python3 -m pip install --disable-pip-version-check "fonttools==4.63.0" "Pillow==12.2.0"
+          mkdir -p /private/tmp build/host-compiler
+          # 保留严格检查，将历史 macOS 链接参数映射为 Linux 等价选项。
+          # Preserve strict checks and map legacy macOS linker flags to their Linux equivalent.
+          cat > build/host-compiler/cc <<'PY'
+          #!/usr/bin/python3
+          import os, sys
+          args = ['-Wl,--gc-sections' if arg == '-Wl,-dead_strip' else arg for arg in sys.argv[1:]]
+          os.execv('/usr/bin/clang', ['clang', '-D_DEFAULT_SOURCE', '-ffunction-sections', '-fdata-sections'] + args)
+          PY
+          chmod +x build/host-compiler/cc
+          cp build/host-compiler/cc build/host-compiler/gcc
+          echo "$PWD/build/host-compiler" >> "$GITHUB_PATH"
+          echo "CC=$PWD/build/host-compiler/cc" >> "$GITHUB_ENV"
+      - name: Host regression tests with build dependencies
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          mkdir -p build/book-tests
+          python3 tools/run_reader_baseline.py
+          python3 tools/boot_panel_actions_host_test.py
+          python3 tools/lock_pin_host_test.py
+          python3 tools/lock_screen_host_test.py
+          python3 tools/reader_spacing_host_test.py
+          python3 tools/test_book_toc.py
+          python3 tools/vertical_punctuation_host_test.py
+          python3 tools/vertical_number_host_test.py
+          python3 tools/test_platform_submission.py
+          cc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -g -fsanitize=address,undefined -fno-omit-frame-pointer -Imain/book -Imain -Itools/book_layout_stubs -Itools/book_source_host_stubs tools/book_layout_host_test.c main/book/reader_session.c main/book/book_layout.c main/book/html_text.c -o build/book-tests/layout
+          build/book-tests/layout
+      - name: Verify and prepare submission
+        shell: bash
+        run: |
+          set -eu
+          release_source_commit=$(git -c safe.directory="$PWD" rev-parse HEAD)
+          test "${#release_source_commit}" -eq 40
+          GITHUB_REF_NAME="$RELEASE_TAG" GITHUB_SHA="$release_source_commit" python3 tools/prepare_platform_submission.py
+      - name: Preserve verified production build
+        uses: actions/upload-artifact@v4
+        with:
+          name: firmware-${{ env.RELEASE_TAG }}-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            build/Read_Pico.bin
+            build/bootloader/bootloader.bin
+            build/partition_table/partition-table.bin
+            build/ota_data_initial.bin
+            build/config/sdkconfig.h
+            build/project_description.json
+            build/flasher_args.json
+            build/flash_args
+            build/platform-submission.json
+      - name: Preserve LGPL relinking inputs
+        uses: actions/upload-artifact@v4
+        with:
+          name: lgpl-relink-${{ env.RELEASE_TAG }}-${{ github.run_id }}
+          if-no-files-found: error
+          path: |
+            build/esp-idf/**/*.a
+            build/esp-idf/**/*.ld
+            build/CMakeFiles/Read_Pico.elf.dir/**/*.obj
+            build/Read_Pico.elf
+            build/Read_Pico.map
+            build/compile_commands.json
+            build/config/
+            build/relink-command.sh
+            build/relink-environment.txt
+            sdkconfig
+            managed_components/
+      - name: Preserve host regression diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: ota-host-regressions
+          path: build/reader-baseline/
+      - name: Upload draft to platform
+        shell: bash
+        run: |
+          set -eu
+          case "$PLATFORM_URL" in https://*) ;; *) echo 'MOGO_PLATFORM_URL must be HTTPS' >&2; exit 1;; esac
+          test -n "$PLATFORM_TOKEN"
+          curl --fail-with-body --silent --show-error --retry 3 --retry-delay 3 \
+            -H "Authorization: Bearer $PLATFORM_TOKEN" \
+            -F 'metadata=@build/platform-submission.json;type=application/json' \
+            -F 'bootloader=@build/bootloader/bootloader.bin;type=application/octet-stream' \
+            -F 'partition-table=@build/partition_table/partition-table.bin;type=application/octet-stream' \
+            -F 'app=@build/Read_Pico.bin;type=application/octet-stream' \
+            -F 'ota-data-initial=@build/ota_data_initial.bin;type=application/octet-stream' \
+            "${PLATFORM_URL%/}/api/v2/integrations/firmware/submissions"

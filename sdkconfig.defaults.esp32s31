@@ -1,0 +1,24 @@
+# ESP32-S31（Metalio E-INK4 Plus）专用默认值。
+# ESP32-S31 (Metalio E-INK4 Plus) target defaults.
+
+# 16 MB flash，DIO 80 MHz（Metalio 量产配置）。
+# 16 MB flash, DIO at 80 MHz (Metalio production configuration).
+CONFIG_ESPTOOLPY_FLASHMODE_DIO=y
+CONFIG_ESPTOOLPY_FLASHFREQ_80M=y
+
+# PSRAM 是渲染帧缓冲的宿主，优先把小块分配留在内部 RAM。
+# PSRAM hosts the framebuffers; keep small allocations in internal RAM.
+CONFIG_SPIRAM_MALLOC_ALWAYSINTERNAL=16
+
+# 与 Metalio 一致：TinyUSB MSC 以 /sdcard 挂载。
+# Match Metalio: TinyUSB MSC mounts at /sdcard.
+CONFIG_TINYUSB_MSC_MOUNT_PATH="/sdcard"
+
+# M2 已接入 UI：开机不再跑面板测试图案，直接进开机图。
+# M2 brings up the UI: no boot test pattern; go straight to the splash.
+# CONFIG_MOGO_EPD_TEST_PATTERN is not set
+
+# Metalio：FT6336U INT=GPIO5，TCA9555 INT=GPIO2（S3 原板为 43/41）。
+# Metalio: FT6336U INT=GPIO5, TCA9555 INT=GPIO2 (the S3 board used 43/41).
+CONFIG_BOARD_TP_INT_GPIO=5
+CONFIG_BOARD_IOE_INT_GPIO=2

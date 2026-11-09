@@ -1,0 +1,24 @@
+# ESP32-S31 16 MB 分区表：5 MB OTA x2 + ~6.04 MB FAT storage（Mogo /flash）+ 末尾 32 KB nvs。
+# ESP32-S31 16 MB layout: dual 5 MB OTA slots, a ~6.04 MB FAT storage partition and a 32 KB tail nvs.
+#
+# 冻结：nvs 必须留在 0x9000-0x10000 头部之外。单文件整机镜像（idf.py merge-bin）按地址连续
+# 覆盖 0x0 到 app 末尾，头部空洞一律填 0xFF；nvs 在头部就会被每次整刷抹掉（2026-10 前的历史行为）。
+# Frozen: the nvs must stay out of the 0x9000-0x10000 head. A merged single-image (idf.py merge-bin)
+# covers 0x0 through the app end contiguously and pads every head gap with 0xFF; a head-placed nvs
+# was wiped by every full-image flash before 2026-10.
+#
+# 冻结：storage 缩 32 KB 而不是 16 KB。wear leveling 把状态区放在分区末尾（约 52 KB），收缩量
+# 必须越过旧状态尾区，旧卷才会 CRC 失败并干净重格式化；缩 16 KB 会带着旧几何静默挂载、损坏
+# /flash 书库（见 IDF components/wear_levelling/WL_Flash.cpp 的 init 状态读取）。
+# Frozen: storage shrinks 32 KB, not 16 KB. Wear levelling keeps its state at the partition tail
+# (~52 KB); only a shrink past the old tail makes the stale volume fail CRC and reformat cleanly.
+# A 16 KB shrink mounts stale geometry and silently corrupts the /flash library (see the state
+# reads in WL_Flash::init of IDF components/wear_levelling).
+#
+# Name,    Type, SubType, Offset,   Size,     Flags
+otadata,   data, ota,     0xD000,   0x2000,
+phy_init,  data, phy,     0xF000,   0x1000,
+ota_0,     app,  ota_0,   0x10000,  0x500000,
+ota_1,     app,  ota_1,   0x510000, 0x500000,
+storage,   data, fat,     0xA10000, 0x5E8000,
+nvs,       data, nvs,     0xFF8000, 0x8000,

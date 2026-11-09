@@ -1,0 +1,14 @@
+/* SPDX-License-Identifier: Apache-2.0
+ * 中文：密码锁独占输入，只有验证成功返回。/ English: Password lock owns input; return only after successful verification.
+ */
+#pragma once
+#include "epd_highlevel.h"
+#include "cst836u.h"
+#include "sc7a20h.h"
+/// 仅恢复匹配当前样式/壁纸的实际锁屏图，失败不影响密码保护。/ Restore actual lock art only for the current style/wallpaper; failure never removes protection.
+bool lock_screen_restore(uint8_t *frame);
+/// 无密码深睡前保存实际锁屏参考，不改变屏幕。/ Persist the actual no-PIN lock reference before deep sleep without driving the panel.
+bool lock_screen_save(const uint8_t *frame);
+/// 仅浅睡档的密码锁屏先等待唤醒，开机直接验证；错误/取消不能返回主循环，等待浅睡无期限、不断电。
+/// Light-only PIN locks wait for wake and boots verify immediately; errors/cancel cannot return to the app loop, and the wait sleeps without a deadline and never powers off.
+void lock_screen_authenticate(EpdiyHighlevelState *hl,cst836u_handle_t touch,sc7a20h_handle_t acc,bool boot);

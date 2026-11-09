@@ -1,0 +1,74 @@
+name: build
+
+on:
+  push:
+    branches: [main]
+  pull_request:
+  workflow_dispatch:
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    # 钉在 v6.1 发布点。release-v6.1 分支会继续演进，LCD LL 接口已经变过一次。
+    # Pin to the v6.1 release. The release-v6.1 branch keeps moving; the LCD LL API already changed once.
+    container: espressif/idf:v6.1
+    steps:
+      - uses: actions/checkout@v4
+
+      # CI 与 OTA 使用同一套 S31 产品配置；CI 叠加编译警告，不另建硬件参数副本。
+      # CI and OTA share S31 product defaults; CI overlays warnings without duplicating hardware settings.
+      - name: build
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py --preview -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.ci" set-target esp32s31
+          idf.py --preview -DSDKCONFIG_DEFAULTS="sdkconfig.defaults;sdkconfig.ci" build
+
+      - name: size
+        shell: bash
+        run: |
+          . $IDF_PATH/export.sh
+          idf.py --preview size
+
+      - name: Prepare strict host compiler
+        shell: bash
+        run: |
+          apt-get update
+          apt-get install -y --no-install-recommends clang libclang-rt-dev libssl-dev zlib1g-dev nodejs
+          . "$IDF_PATH/export.sh"
+          python3 -m pip install --disable-pip-version-check "fonttools==4.63.0" "Pillow==12.2.0"
+          mkdir -p /private/tmp build/host-compiler
+          # 保留严格检查，将历史 macOS 链接参数映射为 Linux 等价选项。
+          # Preserve strict checks and map legacy macOS linker flags to their Linux equivalent.
+          cat > build/host-compiler/cc <<'PY'
+          #!/usr/bin/python3
+          import os, sys
+          args = ['-Wl,--gc-sections' if arg == '-Wl,-dead_strip' else arg for arg in sys.argv[1:]]
+          os.execv('/usr/bin/clang', ['clang', '-D_DEFAULT_SOURCE', '-ffunction-sections', '-fdata-sections'] + args)
+          PY
+          chmod +x build/host-compiler/cc
+          cp build/host-compiler/cc build/host-compiler/gcc
+          echo "$PWD/build/host-compiler" >> "$GITHUB_PATH"
+          echo "CC=$PWD/build/host-compiler/cc" >> "$GITHUB_ENV"
+      - name: Host regression tests with build dependencies
+        shell: bash
+        run: |
+          . "$IDF_PATH/export.sh"
+          mkdir -p build/book-tests
+          python3 tools/run_reader_baseline.py
+          python3 tools/boot_panel_actions_host_test.py
+          python3 tools/lock_pin_host_test.py
+          python3 tools/lock_screen_host_test.py
+          python3 tools/reader_spacing_host_test.py
+          python3 tools/test_book_toc.py
+          python3 tools/vertical_punctuation_host_test.py
+          python3 tools/vertical_number_host_test.py
+          python3 tools/progressive_jpeg_host_test.py
+          cc -std=c11 -D_DEFAULT_SOURCE -Wall -Wextra -Werror -g -fsanitize=address,undefined -fno-omit-frame-pointer -Imain/book -Imain -Itools/book_layout_stubs -Itools/book_source_host_stubs tools/book_layout_host_test.c main/book/reader_session.c main/book/book_layout.c main/book/html_text.c -o build/book-tests/layout
+          build/book-tests/layout
+      - name: Preserve host regression diagnostics
+        if: failure()
+        uses: actions/upload-artifact@v4
+        with:
+          name: build-host-regressions
+          path: build/reader-baseline/

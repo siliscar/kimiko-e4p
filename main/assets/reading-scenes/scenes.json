@@ -1,0 +1,340 @@
+{
+  "format": 1,
+  "sourcePalette": [
+    17,
+    68,
+    136,
+    187,
+    221,
+    255
+  ],
+  "packing": {
+    "bitsPerPixel": 4,
+    "width": 105,
+    "height": 81,
+    "rowBytes": 53,
+    "bytesPerScene": 4293,
+    "leftPixel": "low nibble",
+    "oddRowPadding": 15,
+    "displayScale": 2
+  },
+  "upstream": {
+    "project": "PixelFX",
+    "source": "https://github.com/patch-gg/pixelfx",
+    "revision": "a84159688af3ca37a4be05a0d422b94451b2e24e",
+    "license": "MIT",
+    "licenseFile": "PixelFX-LICENSE.txt",
+    "noticeFile": "PixelFX-NOTICE.md",
+    "credits": [
+      "2026 Patch",
+      "2026 Hugo Duprez"
+    ],
+    "galleryFontIncluded": false,
+    "runtimeDependency": false
+  },
+  "originalComposition": {
+    "copyright": "2026 chopper1026",
+    "license": "LicenseRef-Kiikoread-Personal-Study-1.0",
+    "scope": "Custom subjects, props, layouts and adaptations; not the independently MIT-licensed PixelFX portions."
+  },
+  "scenes": [
+    {
+      "slug": "slow-train",
+      "title": "沿途有书",
+      "style": "生活切片",
+      "sha256": "2a9f948984ea9563fd727a0abee1a326ed985605e5ffa4c9e8c354a03cf1049d",
+      "customComposition": [
+        "train window and landscape",
+        "seat, table, open book and cup"
+      ],
+      "pixelFx": {
+        "source": "src/fx/weather/rain.js",
+        "timeSeconds": 2.4,
+        "options": {
+          "palette": [
+            "#111111",
+            "#444444",
+            "#666666",
+            "#888888",
+            "#aaaaaa",
+            "#cccccc",
+            "#eeeeee",
+            "#ffffff"
+          ],
+          "seed": 14,
+          "density": 1.7
+        },
+        "frameSize": [
+          320,
+          180
+        ],
+        "layer": "front",
+        "glow": 0,
+        "light": 0,
+        "crop": [
+          75,
+          20,
+          265,
+          120
+        ],
+        "resize": [
+          79,
+          35
+        ],
+        "position": [
+          10,
+          16
+        ],
+        "alphaThreshold": 115,
+        "resampling": "nearest"
+      },
+      "adaptation": "Selected rain pixels recolored #888888 inside the window.",
+      "sourceSize": [
+        105,
+        81
+      ],
+      "displaySize": [
+        210,
+        162
+      ]
+    },
+    {
+      "slug": "corner-bookshop",
+      "title": "街角书店",
+      "style": "微缩建筑",
+      "sha256": "345dcbf1d66aa641452cc743f40daa3b4148d4d00b982ad925550886c6d6bfaf",
+      "customComposition": [
+        "isometric bookstore, books and awning",
+        "planter, sidewalk and sign"
+      ],
+      "pixelFx": {
+        "source": "src/fx/weather/falling-leaves.js",
+        "timeSeconds": 2.1,
+        "options": {
+          "palette": [
+            "#111111",
+            "#444444",
+            "#666666",
+            "#888888",
+            "#aaaaaa",
+            "#cccccc",
+            "#eeeeee",
+            "#ffffff"
+          ],
+          "seed": 8,
+          "reds": [
+            "#111111",
+            "#444444",
+            "#666666",
+            "#888888",
+            "#aaaaaa",
+            "#cccccc",
+            "#eeeeee",
+            "#ffffff"
+          ],
+          "golds": [
+            "#111111",
+            "#444444",
+            "#666666",
+            "#888888",
+            "#aaaaaa",
+            "#cccccc",
+            "#eeeeee",
+            "#ffffff"
+          ]
+        },
+        "frameSize": [
+          320,
+          180
+        ],
+        "layer": "front",
+        "glow": 0,
+        "light": 0,
+        "crop": [
+          60,
+          10,
+          250,
+          165
+        ],
+        "resize": [
+          96,
+          76
+        ],
+        "position": [
+          3,
+          0
+        ],
+        "alphaThreshold": 115,
+        "resampling": "nearest"
+      },
+      "adaptation": "Leaves recolored #888888, restricted to left polygon [(0,0),(30,0),(13,36),(7,55),(0,56)] and right rectangle [95,4,104,47].",
+      "sourceSize": [
+        105,
+        81
+      ],
+      "displaySize": [
+        210,
+        162
+      ]
+    },
+    {
+      "slug": "paper-garden",
+      "title": "纸上花园",
+      "style": "幻想插画",
+      "sha256": "2a122cfd1d8e76bc3237a7c5fe5ee81be55f8e056aaca4ed0ea9c041602abe50",
+      "customComposition": [
+        "open-book island, terrain and trees",
+        "bridge, paper plane and water-edge details"
+      ],
+      "pixelFx": {
+        "source": "src/fx/water/waterfall.js",
+        "timeSeconds": 0.73,
+        "options": {
+          "palette": [
+            "#111111",
+            "#444444",
+            "#666666",
+            "#888888",
+            "#aaaaaa",
+            "#cccccc",
+            "#eeeeee",
+            "#ffffff"
+          ],
+          "seed": 5,
+          "height": 34,
+          "width": 4,
+          "ledge": false
+        },
+        "frameSize": [
+          144,
+          136
+        ],
+        "layer": "both",
+        "glow": 0,
+        "light": 0,
+        "crop": [
+          65,
+          84,
+          81,
+          118
+        ],
+        "resize": [
+          10,
+          27
+        ],
+        "position": [
+          77,
+          40
+        ],
+        "alphaThreshold": 115,
+        "resampling": "nearest"
+      },
+      "adaptation": "Waterfall crop quantized to the six source grays, with custom highlights and water-edge details.",
+      "sourceSize": [
+        105,
+        81
+      ],
+      "displaySize": [
+        210,
+        162
+      ]
+    },
+    {
+      "slug": "moon-observatory",
+      "title": "月面观测站",
+      "style": "科幻微景",
+      "sha256": "451e992058e093ab0397eb15a6419d887aa90bedd612e8ceb33ebd4dc86200e0",
+      "customComposition": [
+        "observatory dome and telescope",
+        "rocky ground, craters, globe and equipment"
+      ],
+      "pixelFx": null,
+      "sourceSize": [
+        105,
+        81
+      ],
+      "displaySize": [
+        210,
+        162
+      ]
+    },
+    {
+      "slug": "vinyl-room",
+      "title": "唱片聆听角",
+      "style": "静物小景",
+      "sha256": "f2dbc52efc205db159951ddec32c496e29236626f3ad0e2c8e7164d6cf45d438",
+      "customComposition": [
+        "record player, album sleeve and speaker",
+        "lamp, headphones, books and shelf"
+      ],
+      "pixelFx": null,
+      "sourceSize": [
+        105,
+        81
+      ],
+      "displaySize": [
+        210,
+        162
+      ]
+    },
+    {
+      "slug": "lighthouse-library",
+      "title": "灯塔书屋",
+      "style": "海岸建筑",
+      "sha256": "e663842317761f1258d92be0347109112f3a9edddef4b433cc17949ef1104b9f",
+      "customComposition": [
+        "lighthouse, cottage library and rocks",
+        "shoreline, steps, clouds and light beams"
+      ],
+      "pixelFx": {
+        "source": "src/fx/water/ripples.js",
+        "timeSeconds": 0.9,
+        "options": {
+          "palette": [
+            "#111111",
+            "#444444",
+            "#666666",
+            "#888888",
+            "#aaaaaa",
+            "#cccccc",
+            "#eeeeee",
+            "#ffffff"
+          ],
+          "seed": 6
+        },
+        "frameSize": [
+          136,
+          52
+        ],
+        "layer": "both",
+        "glow": 0,
+        "light": 0,
+        "crop": [
+          28,
+          17,
+          123,
+          43
+        ],
+        "resize": [
+          31,
+          9
+        ],
+        "position": [
+          74,
+          66
+        ],
+        "alphaThreshold": 115,
+        "resampling": "nearest"
+      },
+      "adaptation": "Only opaque crests with luminance >=170 retained and recolored #bbbbbb; dark water omitted.",
+      "sourceSize": [
+        105,
+        81
+      ],
+      "displaySize": [
+        210,
+        162
+      ]
+    }
+  ]
+}

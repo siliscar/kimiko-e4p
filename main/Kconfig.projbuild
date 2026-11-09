@@ -1,0 +1,156 @@
+menu "Built-in components"
+    config PICO_COMPONENT_API_ORIGIN
+        string "HTTPS platform origin for built-in components (no trailing slash)"
+        default "https://mogo.mantake.shop"
+        help
+            Weather uses only the platform proxy. Never configure a provider
+            endpoint or put provider credentials in firmware. Public activation
+            requires a configured platform and confirmed attribution/license.
+endmenu
+
+# 触摸阈值与丢点诊断；诊断日志仅在排查构建启用。
+# Touch threshold and tap-drop diagnostics; enable diagnostic logging only for investigations.
+menu "Touch diagnostics"
+
+    config TOUCH_FT6336U_THRESHOLD_PERCENT
+        int "Experimental FT6336U touch threshold (% of module reset value)"
+        depends on IDF_TARGET_ESP32S31
+        range 50 100
+        default 100
+        help
+            100 保留模组阈值，不新增寄存器访问。75/50 将正常模式 0x80
+            检测阈值降至复位实际值的 75%/50%（向上取整，不写零）。
+            初始化和唤醒时重新应用，写后校验，失败恢复原值。
+            这是整颗触摸芯片的实验调校，不保证单独作用于盖板三键；
+            产品配置采用75%，100%可恢复原阈值。不同膜厚、屏幕误触
+            及充电噪声仍需在对应样机验证。
+            不进入工厂/校准/升级模式，不写 0xA9 量产测试阈值。
+            100 preserves the module default without extra register access.
+            75/50 scales normal-mode register 0x80 to 75%/50% of its reset
+            value, rounded up and never zero. Apply after init/wake resets,
+            verify readback and restore the original on failure. This is an
+            experimental chip-wide setting, not a proven cover-key-only
+            control. Product defaults select 75%; use 100% to restore the
+            original. Validate each glass, screen false touches and charger
+            noise on hardware. No factory, calibration,
+            upgrade or production-test threshold (0xA9) writes.
+
+    config TOUCH_DIAG
+        bool "Enable touch tap-drop diagnostics logging"
+        default n
+        help
+            阅读翻页偶发无响应排查用：在触摸输入链路（app_loop / ui_gesture /
+            app_book / cst836u）输出单行事件日志、阻塞窗口与统计汇总。
+            Investigation aid for sporadic dropped page-turn taps: one-line
+            event logs, stall windows and stats on the touch input chain.
+
+    config TOUCH_DIAG_BEEP
+        bool "Beep when an input event is discarded without action"
+        depends on TOUCH_DIAG
+        default n
+        help
+            手势被取消或双击挂起被冲销时短鸣一声，便于不接串口时统计丢失率。
+            Short beep when a gesture is cancelled or a pending double-tap is
+            dropped, so drop rates can be counted without a serial console.
+
+endmenu
+
+# bring-up 阶段的面板自检；正式固件保持关闭。
+# Panel self-test for bring-up; keep disabled in production images.
+menu "Bring-up diagnostics"
+
+    config APP_SLEEP_DIAGNOSTICS
+        bool "Save one light-sleep summary after wake and replay at boot"
+        default n
+        help
+            浅睡会话只在 RAM 累计调用时间、失败和唤醒原因；退出并恢复外设后
+            仅保存一次到 NVS sleep_diag/last，下次启动重放以便 USB 重连读取。
+            不新增唤醒或逐切片日志。时间统计不是电流测量，保存失败不阻断唤醒。
+            Accumulate call times, failures and wake causes in RAM; after leaving
+            sleep and restoring peripherals, save once to NVS sleep_diag/last
+            and replay at boot for USB reconnection. No extra wakeups or per-slice
+            logs. Timings are not current measurements; save errors never block wake.
+
+    config DISPLAY_POWER_DIAG
+        bool "Log panel power requests and idle deadlines"
+        default n
+        help
+            排查供电就绪超时和前光下边缘变灰：记录开关电请求、保持时间、
+            主循环关电检查延迟，仅在供电失败后额外读取现有状态寄存器。
+            Investigate power-ready timeouts and lit edge graying: log power
+            requests, hold durations and idle-check lateness, reading extra
+            existing status registers only after a power failure.
+
+    config READER_PERF
+        bool "Measure reader operation latency and memory"
+        default n
+        help
+            输出阅读操作、阶段耗时、字体缓存及操作内存低水位，供固定场景对比。
+            Emit reader operation/stage timing, font cache counters and local
+            heap lows for comparisons under fixed conditions.
+
+    config READER_MEMORY
+        bool "Record reader resource ownership snapshots"
+        depends on READER_PERF
+        default n
+        help
+            在计时结束后遍历各拥有者的存活资源，并记录关闭和退出快照。
+            仅用于资源诊断；固定页序的性能对照应关闭，避免遍历影响后续缓存。
+            Walk live owner allocations after timing and record close/exit snapshots.
+            Enable only for resource diagnostics; disable for fixed-page timing
+            comparisons so resource walks do not affect subsequent caches.
+
+    config MOGO_EPD_TEST_PATTERN
+        bool "Run EPD test pattern at boot"
+        default n
+        help
+            开机先画灰阶条、棋盘格、细线、四角十字、中心圆和 1 px 边框，
+            再做一次 GC16 全刷与 20 次 GL16 局刷，最后停 10 秒。
+            Draw gray bars, checkerboard, thin lines, corner crosses, a center
+            circle and a 1 px border, then one GC16 full refresh and 20 GL16
+            area updates, holding the pattern for 10 seconds.
+
+endmenu
+
+# 联网升级源；保持默认即沿用正式站点，填自建前缀即可接入自己的 OTA 平台。
+# Online update sources; keep the defaults for the public sites, or point at a self-hosted platform.
+menu "Online update (OTA)"
+
+    config PICO_OTA_FEED_URL
+        string "Primary manifest URL"
+        default "https://mogo.mantake.shop/api/v2/ota/devices/mogo-e4p/update.json"
+        help
+            设备优先读取的 JSON 清单地址。必须是 HTTPS，服务器不得重定向，
+            响应体不超过 8 KB。
+            Primary manifest URL. Must be HTTPS, the server must not redirect,
+            and the body must stay under 8 KB.
+
+    config PICO_OTA_FEED_FALLBACK_URL
+        string "Fallback manifest URL"
+        default "https://wegooo-cell.github.io/read-pico-reader/update.json"
+        help
+            主源失败后读取的清单地址，要求同上。
+            Manifest read when the primary source fails; same requirements.
+
+    config PICO_OTA_EXTRA_ORIGIN
+        string "Extra download origin prefix (empty disables)"
+        default ""
+        help
+            允许清单引用的额外下载前缀，必须以斜杠结尾，例如
+            https://ota.example.com/files/。前缀之后只允许一个 .bin 文件名，
+            不允许查询串或子目录，避免清单把设备引到任意地址。
+            Extra download prefix a manifest may reference; must end with a
+            slash, e.g. https://ota.example.com/files/. Only one .bin filename
+            may follow it, with no query string or subdirectories.
+
+    config PICO_OTA_ALLOW_HTTP
+        bool "Allow plain http:// origins (local OTA testing only)"
+        default n
+        help
+            仅用于本地联调：允许清单与下载前缀使用 http://。仍然只接受上面
+            配置过的前缀，不会放开任意地址。正式发布必须关闭。
+            Local OTA testing only: permits plain http:// origins. Only the
+            configured prefixes above are accepted; arbitrary URLs remain
+            rejected. Must stay off for production releases.
+
+endmenu

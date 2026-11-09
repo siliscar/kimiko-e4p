@@ -1,0 +1,274 @@
+/*
+ * SPDX-FileCopyrightText: 2026 mindreset
+ * SPDX-License-Identifier: Apache-2.0
+ *
+ * 中文：绘制与命中四栏导航；细线图标分别表示首页、书架、文件和设置，图形来自 Lucide。
+ * English: Draw and hit-test the four-tab navigation with thin-line home, books, files and settings icons from Lucide.
+ * 用户修订：只有共享返回键登记局部命中；底栏图标点击只切页，不放大、不移位。
+ * User revision: only shared backs register local hits; footer icon taps just navigate, never enlarging or shifting.
+ * 变更原因：底栏放大后复位被读成图标跳动，底栏改为完全静止。
+ * Why it changed: enlarge-then-settle read as the icon jumping, so the footer now stays completely still.
+ * 用户2026-11-03修订：固定导航从实际顶部开始，不再额外清白或保护上方24行内容；图标及分隔线位置不变。
+ * User revision 2026-11-03: fixed navigation starts at its actual top without clearing or protecting 24 extra content rows; icons and divider retain their positions.
+ * 用户修订：状态栏签名按系统字体和内建界面字体的共同安全宽度截断，阅读页复用小型字宽表，不重载系统字体。
+ * User revision: fit status signatures to widths safe for the system and built-in UI faces; reading reuses a small metrics table without reloading the system font.
+ * 用户修订：底栏去掉文字，只保留四枚图标和选中横条，高104像素，分隔线使用0x90灰。
+ * User revision: keep only four icons and the selection marker in a 104-pixel footer, without labels, using a 0x90 gray divider.
+ */
+#include "ui_nav.h"
+#include <stdio.h>
+#include <string.h>
+#include <time.h>
+#include "app_registry.h"
+#include "device_power.h"
+#include "pmu_protocol.h"
+#include "wifi_transfer.h"
+#include "ui_kit.h"
+#include "settings.h"
+#include "ui_click_feedback.h"
+#include "ttf_font.h"
+#include "ui_font.h"
+
+// 底栏图标盒、返回键箭头、充电闪电的边长。
+// Box sizes for the bar icons, the back chevron and the charging bolt.
+#define UI_NAV_TAB_ICON_PX 44
+#define UI_NAV_BACK_ICON_PX 48
+#define UI_NAV_BOLT_ICON_PX 26
+#define UI_NAV_NETWORK_ICON_PX 28
+#define UI_STATUS_PERCENT_PX 28
+#define UI_STATUS_SIGNATURE_PX 26
+
+static bool s_status_reading;
+static int s_status_power = -1;
+
+// 只比较屏幕实际显示的电量和充电标志，不让原始采样抖动触发刷新。
+// Compare only the displayed percentage and charging mark, avoiding refreshes from raw sample jitter.
+static int status_power(void) {
+    const pmu_snapshot_t *pmu = device_power_get();
+    return (pmu_battery_percent(pmu) + 1) * 2 + (pmu_battery_charging(pmu) ? 1 : 0);
+}
+
+bool ui_nav_status_power_changed(void) {
+    return s_status_power != status_power();
+}
+
+static struct {
+    bool ready;
+    char signature[96], face[TTF_FONT_PATH_MAX], chosen[TTF_FONT_PATH_MAX];
+    uint16_t widths[96], digits[10], colon, percent, dash;
+} s_status_metrics;
+_Static_assert(UI_STATUS_TIME_PX == UI_STATUS_PERCENT_PX, "status numbers share one native metrics cache");
+_Static_assert(sizeof(s_status_metrics) <= 1024, "status metrics never retain a second font or bitmap");
+
+static int status_safe_width(int px, const char *text, const char *sample) {
+    int active = ui_text_fixed_context_width_px(px, text, sample);
+    int builtin = ui_font_has_text(text) ? ui_font_text_width_px(px, text) : 0;
+    return active > builtin ? active : builtin;
+}
+
+static void status_prepare_metrics(void) {
+    if (s_status_reading) return;
+    const char *signature = app_settings_status_signature();
+    const char *face = ttf_font_path(), *chosen = app_settings_system_font_path();
+    if (s_status_metrics.ready && !strcmp(signature, s_status_metrics.signature) &&
+        !strcmp(face, s_status_metrics.face) && !strcmp(chosen, s_status_metrics.chosen)) return;
+    memset(&s_status_metrics, 0, sizeof(s_status_metrics));
+    snprintf(s_status_metrics.signature, sizeof(s_status_metrics.signature), "%s", signature);
+    snprintf(s_status_metrics.face, sizeof(s_status_metrics.face), "%s", face);
+    snprintf(s_status_metrics.chosen, sizeof(s_status_metrics.chosen), "%s", chosen);
+    char prefix[96] = {0};
+    const size_t length = strlen(s_status_metrics.signature);
+    for (size_t n = 1; n <= length; ++n) {
+        prefix[n - 1] = signature[n - 1];
+        if (n < length && ((unsigned char)signature[n] & 0xc0) == 0x80) continue;
+        s_status_metrics.widths[n] = status_safe_width(UI_STATUS_SIGNATURE_PX, prefix, signature);
+    }
+    for (int digit = 0; digit < 10; ++digit) {
+        char text[] = {(char)('0' + digit), 0};
+        s_status_metrics.digits[digit] = status_safe_width(UI_STATUS_TIME_PX, text, "0123456789:%-");
+    }
+    s_status_metrics.colon = status_safe_width(UI_STATUS_TIME_PX, ":", "0123456789:%-");
+    s_status_metrics.percent = status_safe_width(UI_STATUS_PERCENT_PX, "%", "0123456789:%-");
+    s_status_metrics.dash = status_safe_width(UI_STATUS_PERCENT_PX, "-", "0123456789:%-");
+    s_status_metrics.ready = true;
+}
+
+void ui_nav_status_font_context(bool reading, bool face_changed) {
+    s_status_reading = reading;
+    if (!reading && face_changed) s_status_metrics.ready = false;
+    status_prepare_metrics();
+}
+
+static int status_number_width(const char *text) {
+    if (!s_status_metrics.ready) return ui_text_fixed_width_px(UI_STATUS_TIME_PX, text);
+    int width = 0;
+    for (; *text; ++text) width += *text >= '0' && *text <= '9' ? s_status_metrics.digits[*text - '0']
+        : *text == ':' ? s_status_metrics.colon : *text == '%' ? s_status_metrics.percent : s_status_metrics.dash;
+    return width;
+}
+
+static void status_fit_signature(char *text, int width) {
+    bool cached = s_status_metrics.ready && !strcmp(text, s_status_metrics.signature);
+    size_t n = strlen(text);
+    while (n && (cached ? s_status_metrics.widths[n]
+                       : ui_text_fixed_context_width_px(UI_STATUS_SIGNATURE_PX, text, app_settings_status_signature())) > width) {
+        --n;
+        while (n && ((unsigned char)text[n] & 0xc0) == 0x80) --n;
+        text[n] = 0;
+    }
+}
+
+void ui_nav_back(uint8_t *fb, int x, int y) {
+    ui_click_feedback_register(fb,(EpdRect){x-10,y+3,64,64},UI_CLICK_BACK_SMALL,UI_ICON_ANIMATE_CIRCLE_CHEVRON_LEFT);
+    // 24px原画以48px输出，圆外径约44px，中心与触控区域保持原位。
+    // Render the original 24px artwork at 48px for an approximately 44px circle without changing center or hits.
+    ui_draw_icon(fb,x+22,y+35,UI_NAV_BACK_ICON_PX,UI_ICON_ANIMATE_CIRCLE_CHEVRON_LEFT,0x30);
+}
+
+void ui_nav_wifi_icon(uint8_t *fb, int cx, int cy, int size, uint8_t gray) {
+    if (!fb || size < 16 || size > 40) return;
+    ui_draw_icon(fb, cx, cy, size, UI_ICON_WIFI, gray);
+}
+
+static void icon(uint8_t *fb, int tab, int cx, int y) {
+    // 四个底栏图标固定用 Lucide 细线原图，线宽与状态栏一致；y 是图标盒顶边。
+    // 点击只切页，图标不放大也不移位，底栏保持静止。
+    // The four bar icons stay on upstream Lucide line art at the status-bar stroke weight; y is the box top.
+    // A tap only navigates; icons neither enlarge nor shift, so the footer stays still.
+    static const ui_icon_t tabs[4] = {
+        UI_ICON_HOUSE, UI_ICON_LIBRARY_BIG,
+        UI_ICON_FOLDER_OPEN, UI_ICON_SLIDERS_HORIZONTAL,
+    };
+    if (tab < 0 || tab >= 4) return;
+    ui_draw_icon(fb, cx, y + UI_NAV_TAB_ICON_PX / 2, UI_NAV_TAB_ICON_PX, tabs[tab], UI_GRAY_BLACK);
+}
+
+void ui_nav_draw(uint8_t *fb, int active) {
+    ui_fill_rect_fast((EpdRect){0, UI_NAV_TOP, UI_LOCK_WIDTH, UI_LOCK_HEIGHT - UI_NAV_TOP}, UI_GRAY_WHITE, fb);
+    ui_fill_rect_fast((EpdRect){0, UI_NAV_TOP, UI_LOCK_WIDTH, UI_NAV_DIVIDER_H}, UI_GRAY_LIGHT, fb);
+    if (app_settings_main_refresh_mode() != APP_MAIN_REFRESH_NORMAL) {
+        // 快刷内容边界预留空白；横条在白底上单独短刷，图标保持固定。
+        // Reserve a blank fast-refresh boundary; short-update the marker on white while retaining icons.
+        ui_fill_rect_fast((EpdRect){0, UI_NAV_MARKER_TOP, UI_LOCK_WIDTH, UI_NAV_MARKER_BOTTOM - UI_NAV_MARKER_TOP}, UI_GRAY_WHITE, fb);
+    }
+    for (int i = 0; i < 4; ++i) {
+        int center = (i * 2 + 1) * UI_LOCK_WIDTH / 8;
+        if (i == active) ui_fill_rect_fast((EpdRect){center - 28, UI_NAV_MARKER_TOP, 56,
+            UI_NAV_MARKER_BOTTOM - UI_NAV_MARKER_TOP}, UI_GRAY_BLACK, fb);
+        icon(fb, i, center, UI_NAV_TOP + (UI_LOCK_HEIGHT - UI_NAV_TOP - UI_NAV_TAB_ICON_PX) / 2);
+    }
+}
+
+static time_t status_time(void) {
+    time_t now = time(NULL);
+    const pmu_snapshot_t *pmu = device_power_get();
+    if (now < 1704067200 && pmu && pmu->time_synced && pmu->unix_sec >= 1704067200)
+        now = pmu->unix_sec;
+    return now;
+}
+int64_t ui_nav_clock_minute(void) {
+    time_t now = status_time();
+    return now >= 1704067200 ? (int64_t)now / 60 : -1;
+}
+static void clock_text(char *clock, size_t capacity) {
+    time_t now = status_time();
+    snprintf(clock,capacity,"--:--");
+    if (now > 1704067200) {
+        time_t china = now + 8 * 3600;
+        struct tm date;
+        if (gmtime_r(&china, &date)) snprintf(clock, capacity, "%02d:%02d", date.tm_hour, date.tm_min);
+    }
+}
+void ui_nav_clock_draw(uint8_t *fb) {
+    char clock[12]; clock_text(clock,sizeof(clock));
+    ui_text_fixed_vc(fb,36,40,UI_STATUS_TIME_PX,clock,EPD_DRAW_ALIGN_LEFT,false);
+}
+void ui_nav_clock_text(char *clock, size_t capacity) {
+    clock_text(clock, capacity);
+}
+void ui_nav_date_text(char *date, size_t capacity) {
+    // 与 clock_text 同源同时区：未对时（PMU 回退也不可用）返回空串，调用方按空内容跳过。
+    // Same source and zone as clock_text: when the clock is unsynced (PMU fallback unavailable) the
+    // string stays empty and callers skip it.
+    date[0] = 0;
+    time_t now = status_time();
+    if (now <= 1704067200) return;
+    time_t china = now + 8 * 3600;
+    struct tm day;
+    if (!gmtime_r(&china, &day)) return;
+    static const char *const weekdays[] = {"周日", "周一", "周二", "周三", "周四", "周五", "周六"};
+    snprintf(date, capacity, "%02d-%02d %s", day.tm_mon + 1, day.tm_mday, weekdays[day.tm_wday % 7]);
+}
+void ui_nav_battery_draw(uint8_t *fb, int x, int cy) {
+    EpdRect battery = {x, cy - 11, 40, 22};
+    ui_draw_round_rect(fb, battery, 6, UI_GRAY_BLACK);
+    ui_fill_round_rect(fb, (EpdRect){x + 4, cy - 4, 5, 8}, 2, UI_GRAY_BLACK);
+    const pmu_snapshot_t *pmu = device_power_get();
+    int gauge_percent = pmu_battery_percent(pmu);
+    bool charging = pmu_battery_charging(pmu);
+    if (gauge_percent >= 0) {
+        int width = (31 * gauge_percent + 50) / 100;
+        if (width > 0) ui_fill_round_rect(fb, (EpdRect){x + 4, cy - 7, width, 14}, 4, UI_GRAY_BLACK);
+    }
+    if (charging) {
+        // 闪电只落在深色电量块上：透明像素保留底色，白色墨在浅色区自然消失，
+        // 不必再按电量高低切换墨色。
+        // The bolt shows only over the dark fill: transparent pixels keep the background,
+        // so white ink vanishes on the light part and no SOC-dependent colour is needed.
+        ui_draw_icon(fb, x + 21, cy, UI_NAV_BOLT_ICON_PX, UI_ICON_ZAP, UI_GRAY_WHITE);
+    }
+}
+void ui_nav_status(uint8_t *fb) {
+    status_prepare_metrics();
+    const pmu_snapshot_t *pmu = device_power_get();
+    char clock[12]; clock_text(clock,sizeof(clock));
+    const int status_center_y = 40;
+    // 固定状态栏字号，让系统字体缩放时文字仍与图标共用中心线。
+    // Keep status type fixed so text and glyphs share one centerline at every system font scale.
+    ui_text_fixed_vc(fb, 36, status_center_y, UI_STATUS_TIME_PX, clock, EPD_DRAW_ALIGN_LEFT, false);
+    wifi_transfer_status_t network = {0};
+    wifi_transfer_get_status(&network);
+    const bool wifi_visible = network.network_ready && network.mode == WIFI_TRANSFER_MODE_STA;
+    const bool bluetooth_visible = app_settings_ble_turner();
+    char percent[8] = "--%";
+    int gauge_percent = pmu_battery_percent(pmu);
+    if (gauge_percent >= 0) snprintf(percent, sizeof(percent), "%u%%", (unsigned)gauge_percent);
+    // 按实际百分比宽度排列网络图标，留 10 像素间隔；墨色与电池相同。
+    // Place the network marks 10 px before the measured percentage, using the battery ink.
+    const int percent_left = 595 - status_number_width(percent);
+    const int network_right = percent_left - 10;
+    const int wifi_center = network_right - UI_NAV_NETWORK_ICON_PX / 2;
+    const int bluetooth_center = wifi_center - (wifi_visible ? UI_NAV_NETWORK_ICON_PX + 8 : 0);
+    int signature_width = 280;
+    const int clock_right = 36 + status_number_width(clock);
+    int available = 2 * (UI_LOCK_WIDTH / 2 - clock_right - 12);
+    if (available < signature_width) signature_width = available > 0 ? available : 0;
+    int group_left = percent_left;
+    if (wifi_visible || bluetooth_visible) {
+        group_left = (bluetooth_visible ? bluetooth_center : wifi_center) - UI_NAV_NETWORK_ICON_PX / 2;
+    }
+    available = 2 * (group_left - 12 - UI_LOCK_WIDTH / 2);
+    if (available < signature_width) signature_width = available > 0 ? available : 0;
+    char signature[96];
+    snprintf(signature, sizeof(signature), "%s", app_settings_status_signature());
+    status_fit_signature(signature, signature_width);
+    if (signature[0]) ui_text_fixed_vc(fb, UI_LOCK_WIDTH / 2, status_center_y, UI_STATUS_SIGNATURE_PX,
+                                      signature, EPD_DRAW_ALIGN_CENTER, false);
+    if (wifi_visible) ui_nav_wifi_icon(fb, wifi_center, status_center_y, UI_NAV_NETWORK_ICON_PX, UI_GRAY_BLACK);
+    if (bluetooth_visible)
+        ui_draw_icon(fb, bluetooth_center, status_center_y, UI_NAV_NETWORK_ICON_PX,
+                     UI_ICON_BLUETOOTH, UI_GRAY_BLACK);
+    ui_nav_battery_draw(fb, 606, status_center_y);
+    ui_text_fixed_vc(fb, 595, status_center_y, UI_STATUS_PERCENT_PX, percent, EPD_DRAW_ALIGN_RIGHT, false);
+    s_status_power = status_power();
+}
+
+int ui_nav_hit(uint16_t x, uint16_t y) {
+    if (x >= UI_LOCK_WIDTH || y < UI_NAV_TOUCH_TOP || y >= UI_LOCK_HEIGHT) return -1;
+    int tab = x * 4 / UI_LOCK_WIDTH;
+    return tab < 4 ? tab : -1;
+}
+
+void ui_nav_request(app_ctx_t *ctx, int index) {
+    if (index >= 0 && index < 4) ctx->request_app = app_at(index);
+}

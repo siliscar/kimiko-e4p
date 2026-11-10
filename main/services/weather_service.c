@@ -31,6 +31,11 @@
 #ifndef CONFIG_WEATHER_FORECAST_ORIGIN
 #define CONFIG_WEATHER_FORECAST_ORIGIN "https://api.open-meteo.com"
 #endif
+// IP 归属地用于「定位」按钮：公开、免密钥、直接返回中文省市。留空则关闭定位。
+// Public key-free IP location backing the locate action; empty disables locating.
+#ifndef CONFIG_WEATHER_IP_ORIGIN
+#define CONFIG_WEATHER_IP_ORIGIN "https://myip.ipip.net"
+#endif
 #define WEATHER_RETRY_US (5LL * 60 * 1000000)
 #define WEATHER_SESSION_US (45LL * 1000000)
 #define WEATHER_CONNECT_US (6LL * 1000000)
@@ -167,8 +172,8 @@ static esp_err_t weather_date_header(esp_http_client_event_t *event) {
     return ESP_OK;
 }
 // 可信源：只允许配置的两个 Open-Meteo 主机，避免 URL 拼接把设备引到任意地址。
-// Trusted origins: only the two configured Open-Meteo hosts, so URL assembly cannot redirect
-// the device to an arbitrary address.
+// Trusted origins: only the configured Open-Meteo hosts plus the optional IP-location host,
+// so URL assembly cannot redirect the device to an arbitrary address.
 static bool origin_ok(const char *origin) {
     size_t n = strnlen(origin, 201);
     if (n < 9 || n > 200 || strncmp(origin, "https://", 8)) return false;
@@ -183,6 +188,14 @@ static bool url_trusted(const char *url) {
         const size_t n = strlen(origins[i]);
         if (!origin_ok(origins[i])) return false;
         if (!strncmp(url, origins[i], n) && url[n] == '/') return true;
+    }
+    // 定位源可留空表示关闭；非空时同样要求合法主机名，不因留空而放行其他站点。
+    // The locate origin may stay empty to disable it; when set it must be a bare host, and an
+    // empty value never widens the allow-list.
+    if (CONFIG_WEATHER_IP_ORIGIN[0]) {
+        const size_t n = strlen(CONFIG_WEATHER_IP_ORIGIN);
+        if (!origin_ok(CONFIG_WEATHER_IP_ORIGIN)) return false;
+        if (!strncmp(url, CONFIG_WEATHER_IP_ORIGIN, n) && url[n] == '/') return true;
     }
     return false;
 }
@@ -280,6 +293,48 @@ static bool search_show_page(unsigned page) {
     ++s_view.revision;
     return true;
 }
+// 地理编码查询：先按输入查，没有中国大陆结果时补「市」再查一次。
+// 源库里部分城市只存了「温州市」这类带后缀的全名，补后缀能救回六成误判为缺失的城市；
+// 两次都空才算未找到，避免把「温州」直接报成无结果。
+// Geocoding lookup: query as typed, then retry with a 市 suffix when nothing in mainland China
+// matches. The source stores some cities only under their full suffixed name, so the retry
+// recovers roughly six in ten misses; only both misses together mean "not found".
+static bool geocode_lookup(char *body, const char *escaped, weather_location_t *out,
+                           unsigned capacity, unsigned *count) {
+    char url[1024];
+    *count = 0;
+    for (unsigned attempt = 0; attempt < 2; ++attempt) {
+        // 第二次附加「市」的百分号编码；不能让 snprintf 把 %E5 当成格式符。
+        // The second pass appends the percent-encoded 市, escaped so snprintf keeps it literal.
+        const char *suffix = attempt ? "%E5%B8%82" : "";
+        if (snprintf(url, sizeof(url), "%s/v1/search?name=%s%s&count=%u&language=zh&format=json",
+                     CONFIG_WEATHER_GEOCODING_ORIGIN, escaped, suffix, capacity) >= (int)sizeof(url)) return false;
+        if (!http_get(url, body, NULL)) return false;
+        if (!weather_om_locations_parse(body, strlen(body), out, capacity, count)) return false;
+        if (*count) return true;
+    }
+    return true;
+}
+// 「定位」：先用公网 IP 的城市名，再交给地理编码解析成带坐标的城市。
+// 任何一步失败都回退到手动选城，绝不臆测一个城市；候选数组放 PSRAM，避免占任务栈。
+// Locate resolves the city name from the public IP, then geocodes it into a coordinate-bearing
+// city. Any failure falls back to manual selection instead of guessing a city; the hit array
+// lives in PSRAM so the worker stack stays small.
+static bool locate_city(char *body, weather_location_t *out) {
+    if (!CONFIG_WEATHER_IP_ORIGIN[0]) return false;
+    char city[65], escaped[577], url[768];
+    if (snprintf(url, sizeof(url), "%s/json", CONFIG_WEATHER_IP_ORIGIN) >= (int)sizeof(url)) return false;
+    if (!http_get(url, body, NULL)) return false;
+    if (!weather_ip_city_parse(body, strlen(body), city, sizeof(city))) return false;
+    if (!weather_url_encode(city, escaped, sizeof(escaped))) return false;
+    weather_location_t *hits = heap_caps_malloc(5 * sizeof(*hits), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
+    if (!hits) return false;
+    unsigned count = 0;
+    bool ok = geocode_lookup(body, escaped, hits, 5, &count) && count > 0;
+    if (ok) *out = hits[0];
+    heap_caps_free(hits);
+    return ok;
+}
 static void weather_worker(void *arg) {
     (void)arg; bool owned = false;
     char *body = heap_caps_malloc(WEATHER_BODY_LIMIT + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
@@ -310,7 +365,7 @@ static void weather_worker(void *arg) {
     // Open-Meteo is a public service with no platform-side enable/ready probe, so go straight
     // to the concrete request.
     if (s_request == APP_WEATHER_SEARCH) {
-        char escaped[577], url[1024];
+        char escaped[577];
         if (!weather_url_encode(s_query, escaped, sizeof(escaped))) goto done;
         s_result.total = s_requested_total_known ? s_requested_total : 0;
         for (unsigned i = 0; i < s_requested_missing_count; ++i) {
@@ -321,13 +376,7 @@ static void weather_worker(void *arg) {
             weather_search_batch_t *batch = heap_caps_malloc(sizeof(*batch), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
             if (!batch) goto done;
             memset(batch, 0, sizeof(*batch));
-            if (snprintf(url, sizeof(url), "%s/v1/search?name=%s&count=%u&language=zh&format=json",
-                         CONFIG_WEATHER_GEOCODING_ORIGIN, escaped, WEATHER_SEARCH_BATCH_SIZE) >= (int)sizeof(url)) {
-                heap_caps_free(batch); goto done;
-            }
-            if (!http_get(url, body, NULL) ||
-                !weather_om_locations_parse(body, strlen(body), batch->locations,
-                                            WEATHER_SEARCH_BATCH_SIZE, &batch->count)) {
+            if (!geocode_lookup(body, escaped, batch->locations, WEATHER_SEARCH_BATCH_SIZE, &batch->count)) {
                 heap_caps_free(batch); goto done;
             }
             s_result.total = batch->count;
@@ -335,13 +384,16 @@ static void weather_worker(void *arg) {
         }
         result_notice(APP_WEATHER_READY, ""); goto done;
     }
-    // 自动定位需要 IP 归属地服务，本项目不再引入第三方依赖：缺城市时请用户手动选择。
-    // Auto-location would need an IP-geolocation service, which this project no longer depends
-    // on, so a missing city asks the user to pick one manually.
-    if (s_request == APP_WEATHER_LOCATE || !s_requested_has_city) {
-        result_notice(APP_WEATHER_CITY_REQUIRED, "请手动选择城市"); goto done;
-    }
+    // 「定位」或首次开机没有城市：用 IP 城市名自动选城；失败时不臆测城市，改为手动选择。
+    // Locate, or the first boot without a city: pick one from the IP city name. On failure the
+    // device asks for a manual choice rather than inventing a city.
     weather_location_t city = s_requested_city;
+    if (s_request == APP_WEATHER_LOCATE || !s_requested_has_city) {
+        if (!locate_city(body, &city)) {
+            result_notice(APP_WEATHER_CITY_REQUIRED, "未能确定城市，请手动选择"); goto done;
+        }
+        s_result.has_city = true; s_result.city = city;
+    }
     char url[512];
     if (snprintf(url, sizeof(url),
                  "%s/v1/forecast?latitude=%.4f&longitude=%.4f"

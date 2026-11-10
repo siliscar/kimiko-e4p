@@ -15,6 +15,16 @@ menu "Weather (Open-Meteo)"
             Two-day forecasts come from this public Open-Meteo endpoint, keyed
             by the selected city's coordinates. No API key is used.
             Empty disables weather updates.
+
+    config WEATHER_IP_ORIGIN
+        string "IP location origin for the locate action (no trailing slash)"
+        default "https://myip.ipip.net"
+        help
+            The locate action asks this public endpoint for the city the current
+            public IP belongs to, then resolves that name through the geocoding
+            API. It returns Chinese province/city labels, needs no key and sends
+            no device identifiers beyond the request itself.
+            Empty removes the locate action; the user then picks a city manually.
 endmenu
 
 # 触摸阈值与丢点诊断；诊断日志仅在排查构建启用。

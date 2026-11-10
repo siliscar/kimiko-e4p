@@ -41,6 +41,9 @@ bool weather_location_valid(const weather_location_t *location);
 /// Parse Open-Meteo geocoding results; keep mainland China only and normalise the timezone.
 bool weather_om_locations_parse(const char *json, size_t length,
                                 weather_location_t *locations, unsigned capacity, unsigned *count);
+/// IP 归属地响应取城市名，已剥掉「市」后缀供地理编码检索；失败时为空。
+/// Extract the city from an IP-location response, stripped of the trailing 市 for geocoding.
+bool weather_ip_city_parse(const char *json, size_t length, char *city, size_t capacity);
 /// Open-Meteo 两日预报解析；有效期在本地合成，不依赖上游代理。
 /// Parse the Open-Meteo two-day forecast; validity timestamps are synthesised locally.
 bool weather_om_forecast_parse(const char *json, size_t length, int64_t now,

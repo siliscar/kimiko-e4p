@@ -23,6 +23,13 @@
     "{\"results\":[{\"id\":1808926,\"name\":\"杭州\",\"latitude\":30.29365,\"longitude\":120.16142," \
     "\"country_code\":\"CN\",\"timezone\":\"Asia/Shanghai\",\"country\":\"中国\",\"admin1\":\"浙江\"}]}"
 
+// IP 归属地样本（ipip.net 形态）：市级为「杭州市」，解析时应剥掉「市」再交给地理编码。
+// IP-location fixture in the ipip.net shape: the city carries a 市 suffix that parsing trims
+// before the name is used as a geocoding query.
+#define WEATHER_TEST_IP_LOCATION \
+    "{\"ret\":\"ok\",\"data\":{\"ip\":\"203.0.113.9\"," \
+    "\"location\":[\"中国\",\"浙江省\",\"杭州市\",\"\",\"电信\"]}}"
+
 // 两日预报样本：2 → 多云(101)，61 → 小雨(305)；日出日落为本地时间，需按 +08 折成 UTC。
 // Two-day forecast: 2 → partly cloudy (101), 61 → light rain (305); sunrise/sunset are local
 // wall-clock strings that must be converted to UTC with the +08 offset.

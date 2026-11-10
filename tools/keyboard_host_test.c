@@ -114,6 +114,36 @@ int main(void) {
         }
     }
     out=malloc(sizeof(*out));assert(out);
+    // 城市全拼必须直接出城市名：天气选城只走这条路径，缺了就只能逐字选。
+    // Full Pinyin must yield the city name directly: weather city search only takes this path,
+    // and without it the user has to pick characters one by one.
+    {
+        static const struct { const char *roman, *city; } cities[] = {
+            {"hangzhou","杭州"},{"ningbo","宁波"},{"wenzhou","温州"},{"suzhou","苏州"},
+            {"fuzhou","福州"},{"yichun","宜春"},{"beijing","北京"},{"wulumuqi","乌鲁木齐"},
+            {"lasa","拉萨"},{"huhehaote","呼和浩特"},{"qinhuangdao","秦皇岛"},{"suqian","宿迁"},
+        };
+        for(unsigned i=0;i<sizeof(cities)/sizeof(*cities);++i){
+            assert(ui_ime_candidates(cities[i].roman,false,"","",out));
+            bool found=false;
+            for(size_t j=0;j<out->count;++j)if(!strcmp(out->items[j].text,cities[i].city))found=true;
+            if(!found){fprintf(stderr,"missing city candidate: %s -> %s\n",cities[i].roman,cities[i].city);abort();}
+        }
+        // 同音城市里更常用的那座必须排在前面，否则「苏州」会被「宿州」压到第二位。
+        // The more common homophone must come first, or 「宿州」 would push 「苏州」 down.
+        assert(ui_ime_candidates("suzhou",false,"","",out));
+        assert(out->count&&!strcmp(out->items[0].text,"苏州"));
+        assert(ui_ime_candidates("fuzhou",false,"","",out));
+        assert(out->count&&!strcmp(out->items[0].text,"福州"));
+        // 九宫格同一条路径也要给城市。
+        // The nine-key path must produce cities as well.
+        char digits[64];
+        assert(ui_ime_digits("hangzhou",digits,sizeof(digits)));
+        assert(ui_ime_candidates(digits,true,"","",out));
+        bool t9_city=false;
+        for(size_t j=0;j<out->count;++j)if(!strcmp(out->items[j].text,"杭州"))t9_city=true;
+        assert(t9_city);
+    }
     uint32_t all[2048];size_t total=book_search_candidates("shi",all,2048,0);assert(total>24);
     bool seen[65536]={0};size_t offset=0,unique=0;
     do {

@@ -145,3 +145,22 @@
 - Kconfig：`PICO_COMPONENT_API_ORIGIN` → `WEATHER_GEOCODING_ORIGIN`（默认 `https://geocoding-api.open-meteo.com`）+ `WEATHER_FORECAST_ORIGIN`（默认 `https://api.open-meteo.com`）。
 - 测试：`weather_model_host_test.c` 重写（地理编码过滤/时区归一/容量/空结果、预报两日/WMO 码表/日出 UTC/坏响应/有效期边界），`weather_service_host_test.c` 重写（可信源、守卫、搜索分页、缓存、取消、429/坏读），`weather_raster_host_test.py` 改用新解析。全部 PASS；`idf.py build` 通过（bin 0x469480，比代理版略小）。
 - 已知取舍：`APP_WEATHER_DISABLED` 枚举保留但不再触发（无平台开关）；自动定位入口保留 UI 但只会提示手动选城。
+
+## 第六批（2026-11-10 IP 定位 + 输入法城市词库）
+
+### ⑯ 「定位」按钮改用 IP 归属地
+- 选型：`https://myip.ipip.net/json`（HTTPS、免密钥、直接返回中文省市，93B/约200ms）。根证书链为 `*.ipip.net` ← TrustAsia DV TLS ECC CA 2024 ← TrustAsia TLS ECC Root CA ← Certum Trusted Network CA，后两者都在 `cacrt_all.pem`（`CONFIG_MBEDTLS_CERTIFICATE_BUNDLE_DEFAULT_FULL=y`），固件可验证。
+- 解析：`weather_ip_city_parse` 取 `data.location[2]`（市），空则退回 `[1]`（省）；剥掉「市/省」后缀——地理编码只认「杭州」不认「杭州市」（实测带后缀返回 0 条）。
+- 流程：定位 → IP 城市名 → `geocode_lookup` 取坐标 → 预报。开机首次无城市时自动尝试一次（`s_auto_attempted` 语义不变）。任一步失败都回退「未能确定城市，请手动选择」，不臆测城市。
+- 配置：`CONFIG_WEATHER_IP_ORIGIN`（默认 `https://myip.ipip.net`，留空关闭定位）；`url_trusted` 额外放行该主机，空值不放宽允许列表。
+
+### ⑰ 地理编码补「市」重查
+- 问题：Open-Meteo 地理编码对 297 个地级及以上城市，首查只命中 218 个（73%）——「温州」「厦门」「泉州」「常州」直接 0 条，但「温州市」有。
+- 处理：`geocode_lookup` 首查为空时补 `%E5%B8%82`（「市」）重查一次。实测覆盖 218+48=266（89.6%）。
+- 仍缺 31 个（湖州、连云港、景德镇、商丘、许昌、哈密…）。**不做拼音回退**：ˈ宿州ˈ与ˈ苏州ˈ同音，回退会悄悄显示错城市天气，比「未找到」更糟。
+
+### ⑱ 输入法城市词库（297 城）
+- 问题：IME 的 DP 每音节只取最高频字，词表外的词全拼成乱码——`hangzhou`→「行周」、`changsha`→「长傻」、`qingdao`→「情到」、`urumqi`/`lhasa` 空结果。实测 38 个城市只有 3 个正确。
+- 处理：`ui_ime_phrases.h` 追加 293 条城市（4 条已存在），pypinyin 生成拼音 + 逐条用地理编码校验城市名真实存在。排序按「直辖市 → 省会 → 其他」，同音组（suzhou/fuzhou/yichun/taizhou/yulin）按常用度人工定序，避免「宿州」压过「苏州」。
+- 结果：297 城全命中，291 个排首位，6 个在前八；九宫格与全键盘同样生效；`keyboard_host_test.c` 加入城市回归断言（含同音排序与 T9）。
+- 体积：bin 0x469480 → 0x46b6a0（+8736B），5MB 分区仍余 608KB。

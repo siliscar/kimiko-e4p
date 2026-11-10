@@ -13,21 +13,24 @@
 static time_t wall_time;
 static time_t weather_test_time(time_t *out) {if(out)*out=wall_time;return wall_time;}
 #define time weather_test_time
-// 两个 Open-Meteo 源都由测试注入，只验证 URL 拼接、可信源校验与响应处理，不联网。
-// Both Open-Meteo origins are injected so the test only exercises URL assembly, trusted-origin
-// checks and response handling; nothing reaches the network.
+// 两个 Open-Meteo 源与定位源都由测试注入，只验证 URL 拼接、可信源校验与响应处理，不联网。
+// Both Open-Meteo origins and the locate origin are injected so the test only exercises URL
+// assembly, trusted-origin checks and response handling; nothing reaches the network.
 #define CONFIG_WEATHER_GEOCODING_ORIGIN "https://geo.test"
 #define CONFIG_WEATHER_FORECAST_ORIGIN "https://fc.test"
+#define CONFIG_WEATHER_IP_ORIGIN "https://ip.test"
 #include "../main/services/weather_service.c"
 #undef time
 static void (*pending)(void *);
 static bool done,worker,flash,saved=true,fail_flash,fail_task,fail_alloc,cancel_read,cancel_connect,ota_busy,ble_connected;
-static unsigned starts,stops,requests,forecast_calls,search_calls,ns_writes,time_cancels;
+static unsigned starts,stops,requests,forecast_calls,search_calls,suffix_calls,ip_calls,ns_writes,time_cancels;
 static int network_state;
 static int64_t monotonic;
 static unsigned body_reads,heap_allocs;
-static int forecast_status=200,geocoding_status=200;
+static int forecast_status=200,geocoding_status=200,ip_status=200;
 static const char *forecast_body=WEATHER_TEST_FORECAST,*geocoding_body=WEATHER_TEST_GEOCODING;
+static const char *suffix_body="{\"results\":[]}";
+static const char *ip_body=WEATHER_TEST_IP_LOCATION;
 static const char *date_header="Mon, 02 Nov 2026 00:30:00 GMT";
 static bool stall_body,fail_body,incomplete_body,cancel_forecast_read;
 static char geocoding_payload[WEATHER_BODY_LIMIT+1];
@@ -105,13 +108,22 @@ esp_http_client_handle_t esp_http_client_init(const esp_http_client_config_t *c)
                !strstr(c->url,"locationId="));
         assert(!strncmp(c->url,CONFIG_WEATHER_FORECAST_ORIGIN,strlen(CONFIG_WEATHER_FORECAST_ORIGIN)));
         ++forecast_calls;h->body=forecast_body;h->status=forecast_status;h->forecast=true;h->date=date_header;
+    } else if(!strncmp(c->url,CONFIG_WEATHER_IP_ORIGIN,strlen(CONFIG_WEATHER_IP_ORIGIN))) {
+        // 定位请求只问「这个出口 IP 属于哪个城市」，不带任何设备标识。
+        // The locate request only asks which city the egress IP belongs to, with no device id.
+        assert(strstr(c->url,"/json"));
+        ++ip_calls;h->body=ip_body;h->status=ip_status;
     } else {
-        // 城市搜索请求使用地理编码源，并带上中文语言与批量大小。
-        // City search hits the geocoding origin with Chinese language and the batch size.
+        // 城市搜索请求使用地理编码源，并带上中文语言与批量大小；定位只取少量候选。
+        // City search hits the geocoding origin with Chinese language and the batch size; the
+        // locate step only needs a few candidates.
         assert(strstr(c->url,"/v1/search?name=")&&strstr(c->url,"language=zh")&&
-               strstr(c->url,"count=20")&&!strstr(c->url,"&page="));
+               (strstr(c->url,"count=20")||strstr(c->url,"count=5"))&&!strstr(c->url,"&page="));
         assert(!strncmp(c->url,CONFIG_WEATHER_GEOCODING_ORIGIN,strlen(CONFIG_WEATHER_GEOCODING_ORIGIN)));
-        ++search_calls;h->body=geocoding_body;h->status=geocoding_status;
+        // 补「市」的那次重试走独立响应，便于区分首查与重查。
+        // The 市 retry has its own reply so the first and second lookups stay distinguishable.
+        if(strstr(c->url,"%E5%B8%82")){++suffix_calls;h->body=suffix_body;h->status=geocoding_status;}
+        else{++search_calls;h->body=geocoding_body;h->status=geocoding_status;}
     }
     h->size=strlen(h->body);return h;
 }
@@ -172,8 +184,10 @@ static void reset(void) {
     assert(!pending&&!done&&!app_weather_busy());
     app_weather_clear_search();
     monotonic=0;prefs_size=cache_size=0;
-    forecast_status=geocoding_status=200;
+    forecast_status=geocoding_status=ip_status=200;
     forecast_body=WEATHER_TEST_FORECAST;geocoding_body=WEATHER_TEST_GEOCODING;
+    suffix_body="{\"results\":[]}";
+    ip_body=WEATHER_TEST_IP_LOCATION;
     date_header="Mon, 02 Nov 2026 00:30:00 GMT";
     stall_body=fail_body=incomplete_body=cancel_forecast_read=false;
     s_view=(app_weather_view_t){0};s_loaded=false;app_weather_init();
@@ -193,21 +207,43 @@ int main(void) {
     assert(!s_view.enabled&&!s_view.has_city&&!requests&&s_view.auto_refresh);
     assert(!app_weather_poll(false)&&!requests);
 
-    // 2) 没有城市时更新请求在 worker 里直接要求选城，不联网。
-    // 2) Updating without a city asks for a selection inside the worker and never goes online.
+    // 2) 没有城市时先用出口 IP 自动选城，再取预报；定位按钮复用同一条链路。
+    // 2) With no city the worker locates one from the egress IP, then fetches the forecast; the
+    // locate action reuses exactly that path.
+    unsigned ip_before=ip_calls,search_before=search_calls,forecast_before=forecast_calls;
     request(APP_WEATHER_FETCH,NULL);
-    assert(s_view.state==APP_WEATHER_CITY_REQUIRED&&!requests);
-    // 自动定位同样不再联网：本项目不依赖 IP 归属地服务。
-    // Auto-location no longer goes online either: no IP-geolocation dependency.
+    assert(ip_calls==ip_before+1&&search_calls==search_before+1&&forecast_calls==forecast_before+1);
+    assert(s_view.state==APP_WEATHER_READY&&s_view.has_city&&s_view.has_forecast);
+    assert(!strcmp(s_view.city.name,"杭州")&&!strcmp(s_view.city.id,"OM1808926"));
+    reset();
+    ip_before=ip_calls;
     request(APP_WEATHER_LOCATE,NULL);
-    assert(s_view.state==APP_WEATHER_CITY_REQUIRED&&!requests);
+    assert(ip_calls==ip_before+1&&s_view.has_city&&s_view.state==APP_WEATHER_READY);
+    // IP 服务报错时回退到手动选城，不臆测城市，也不继续查预报。
+    // When the IP service reports an error the worker asks for a manual choice instead of
+    // inventing a city, and never moves on to the forecast.
+    reset();
+    ip_body="{\"ret\":\"err\"}";
+    ip_before=ip_calls;forecast_before=forecast_calls;
+    request(APP_WEATHER_LOCATE,NULL);
+    assert(ip_calls==ip_before+1&&forecast_calls==forecast_before);
+    assert(s_view.state==APP_WEATHER_CITY_REQUIRED&&!s_view.has_city);
+    // 城市名在地理编码里没有中国大陆结果时同样回退。
+    // The same fallback applies when the city name yields no mainland geocoding hit.
+    reset();
+    geocoding_body="{\"results\":[]}";
+    forecast_before=forecast_calls;
+    request(APP_WEATHER_LOCATE,NULL);
+    assert(forecast_calls==forecast_before);
+    assert(s_view.state==APP_WEATHER_CITY_REQUIRED&&!s_view.has_city);
 
     // 3) 搜索：一次请求取回整批，本地按 8 条分页。
     // 3) Search fetches one batch and slices it locally, eight per page.
     reset();
     geocoding_body=geocoding_fixture(10);
+    const unsigned search_base=search_calls;
     request(APP_WEATHER_SEARCH,"杭州");
-    assert(search_calls==1&&s_view.state==APP_WEATHER_READY);
+    assert(search_calls==search_base+1&&s_view.state==APP_WEATHER_READY);
     assert(s_view.result_count==8&&s_view.result_total==10&&s_view.result_page==0);
     assert(!strcmp(s_view.results[0].id,"OM1808900"));
     const unsigned paging=requests;
@@ -220,16 +256,32 @@ int main(void) {
     reset();geocoding_body=geocoding_fixture(0);
     request(APP_WEATHER_SEARCH,"杭州");
     assert(s_view.state==APP_WEATHER_READY&&!s_view.result_count&&!s_view.result_total);
+    // 源库把部分城市只存成「温州市」：原名查空后补「市」重查应能命中，且只重查一次。
+    // Some cities exist only as 「温州市」: after an empty first pass the 市 retry must hit,
+    // and it runs exactly once.
+    reset();geocoding_body=geocoding_fixture(0);suffix_body=WEATHER_TEST_GEOCODING;
+    const unsigned search_mark=search_calls,suffix_mark=suffix_calls;
+    request(APP_WEATHER_SEARCH,"温州");
+    assert(search_calls==search_mark+1&&suffix_calls==suffix_mark+1);
+    assert(s_view.state==APP_WEATHER_READY&&s_view.result_count==2&&s_view.result_total==2);
+    // 首查命中时不会多打一次重试。
+    // A first-pass hit never triggers the retry.
+    reset();
+    const unsigned suffix_quiet=suffix_calls;
+    request(APP_WEATHER_SEARCH,"杭州");
+    assert(suffix_calls==suffix_quiet&&s_view.result_count==2);
 
     // 4) 选城后取预报：两日、缓存落盘、无线借用后归还。
     // 4) After selecting a city, fetch the forecast: two days, cached, radio borrowed and returned.
     reset();
     pick_city();
     assert(s_view.has_city==true&&!s_view.has_forecast);
-    const unsigned radio_starts=starts, radio_stops=stops;
+    const unsigned radio_starts=starts, radio_stops=stops, forecast_base=forecast_calls;
     request(APP_WEATHER_FETCH,NULL);
     assert(s_view.state==APP_WEATHER_READY&&s_view.has_forecast);
-    assert(forecast_calls==1&&starts==radio_starts+1&&stops==radio_stops+1&&starts==stops);
+    // 已有城市时直接查预报，不再走定位。
+    // With a city already selected the worker goes straight to the forecast, never locating again.
+    assert(forecast_calls==forecast_base+1&&starts==radio_starts+1&&stops==radio_stops+1&&starts==stops);
     assert(cache_size&&prefs_size&&!flash);
     const weather_forecast_t original=s_view.forecast;
     assert(original.days[0].date==weather_local_day(original.fetched));
@@ -275,9 +327,14 @@ int main(void) {
     assert(!s_view.has_forecast&&!cache_size);
 
     // 7) 可信源校验：非配置主机一律拒绝，避免被拼到任意地址。
-    // 7) Trusted-origin guard: any host outside the two configured origins is refused.
+    // 7) Trusted-origin guard: any host outside the configured origins is refused.
     assert(url_trusted("https://fc.test/v1/forecast?latitude=1&longitude=2"));
     assert(url_trusted("https://geo.test/v1/search?name=x"));
+    // 定位源单独放行，且只放行它自己的路径。
+    // The locate origin is allowed on its own, and only for its own paths.
+    assert(url_trusted("https://ip.test/json"));
+    assert(!url_trusted("https://ip.test.evil/json"));
+    assert(!url_trusted("https://evil.test/json"));
     assert(!url_trusted("https://evil.test/v1/forecast"));
     assert(!url_trusted("https://fc.test.evil/v1/forecast"));
     assert(!url_trusted("https://fc.test@evil/v1/forecast"));

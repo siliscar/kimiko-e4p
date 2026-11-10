@@ -239,5 +239,41 @@ int main(void) {
     wrong=city;strcpy(wrong.timezone,"Asia/Urumqi");assert(!weather_location_valid(&wrong));
     f.stale=255;assert(!weather_forecast_valid(&f,now));
     city.timezone[0]=0;assert(!weather_location_valid(&city));
-    puts("PASS: Open-Meteo geocoding/forecast, WMO mapping, dates, solar UTC conversion, ranges, expiry");
+    // IP 归属地：取市级、剥后缀、ret 必须是 ok，缺字段或越界都拒绝。
+    // IP location: prefer the city, trim the suffix, require ret=ok and reject malformed replies.
+    char ip_city[65];
+    const char *ip_ok[] = {
+        "{\"ret\":\"ok\",\"data\":{\"ip\":\"1.2.3.4\",\"location\":[\"中国\",\"广东\",\"深圳\",\"\",\"电信\"]}}",
+        "{\"ret\":\"ok\",\"data\":{\"ip\":\"1.2.3.4\",\"location\":[\"中国\",\"广东省\",\"深圳市\",\"\",\"电信\"]}}",
+        "{\"ret\":\"ok\",\"data\":{\"location\":[\"中国\",\"北京\",\"北京\"]}}",
+        "{\"ret\":\"ok\",\"data\":{\"location\":[\"中国\",\"浙江\",\"\",\"\",\"电信\"]}}",
+    };
+    const char *ip_ok_want[] = {"深圳", "深圳", "北京", "浙江"};
+    for (unsigned i = 0; i < sizeof(ip_ok) / sizeof(*ip_ok); ++i) {
+        assert(weather_ip_city_parse(ip_ok[i], strlen(ip_ok[i]), ip_city, sizeof(ip_city)));
+        assert(!strcmp(ip_city, ip_ok_want[i]));
+    }
+    // 直辖市两段重复，剥一次「市」即可；不重复截断成空串。
+    const char *ip_muni = "{\"ret\":\"ok\",\"data\":{\"location\":[\"中国\",\"上海市\",\"上海市\"]}}";
+    assert(weather_ip_city_parse(ip_muni, strlen(ip_muni), ip_city, sizeof(ip_city)) && !strcmp(ip_city, "上海"));
+    const char *ip_bad[] = {
+        "{\"ret\":\"err\",\"data\":{\"location\":[\"中国\",\"广东\",\"深圳\"]}}",
+        "{\"ret\":\"ok\",\"data\":{\"ip\":\"1.2.3.4\"}}",
+        "{\"ret\":\"ok\",\"data\":{\"location\":[\"中国\"]}}",
+        "{\"ret\":\"ok\",\"data\":{\"location\":[]}}",
+        "{\"ret\":\"ok\",\"data\":{\"location\":[\"中国\",\"\"]}}",
+        "{\"ret\":\"ok\",\"data\":{\"location\":[\"中国\",3,null]}}",
+        "{\"ret\":\"ok\",\"data\":\"x\"}",
+        "not json",
+        "{\"ret\":\"ok\",\"data\":{\"location\":[\"中国\",\"广东\",\"深圳\"]}} trailing",
+    };
+    for (unsigned i = 0; i < sizeof(ip_bad) / sizeof(*ip_bad); ++i) {
+        assert(!weather_ip_city_parse(ip_bad[i], strlen(ip_bad[i]), ip_city, sizeof(ip_city)));
+        assert(!ip_city[0]);
+    }
+    // 容量不足时拒绝，而不是截断出半个汉字让地理编码去猜。
+    // Reject rather than truncating a UTF-8 name and letting the geocoder guess.
+    assert(!weather_ip_city_parse(ip_ok[0], strlen(ip_ok[0]), ip_city, 4));
+    assert(!weather_ip_city_parse(ip_ok[0], strlen(ip_ok[0]), NULL, 65));
+    puts("PASS: Open-Meteo geocoding/forecast, IP location, WMO mapping, dates, solar UTC conversion, ranges, expiry");
 }

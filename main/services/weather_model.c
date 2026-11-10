@@ -188,6 +188,40 @@ bool weather_om_locations_parse(const char *json, size_t length,
     cJSON_Delete(root); *count = used;
     return ok;
 }
+// ipip.net 的 IP 归属地：{"ret":"ok","data":{"location":["中国","广东","深圳","","电信"]}}
+// 取市级（索引 2），为空时退回省级（索引 1）；直辖市两段同名，取任一段都可。
+// 地理编码只认「杭州」不认「杭州市」，所以剥掉行政区后缀再交给城市搜索。
+// ipip.net IP location: prefer the city (index 2) and fall back to the province (index 1);
+// municipalities repeat the same name in both slots. The geocoder only matches bare names,
+// so the administrative suffix is trimmed before the name is used as a search term.
+bool weather_ip_city_parse(const char *json, size_t length, char *city, size_t capacity) {
+    if (!city || capacity < 4) return false;
+    city[0] = 0;
+    cJSON *root = document(json, length);
+    if (!root) return false;
+    cJSON *ret = cJSON_GetObjectItemCaseSensitive(root, "ret");
+    cJSON *data = cJSON_GetObjectItemCaseSensitive(root, "data");
+    cJSON *list = cJSON_GetObjectItemCaseSensitive(data, "location");
+    bool ok = cJSON_IsString(ret) && !strcmp(ret->valuestring, "ok") &&
+        cJSON_IsArray(list) && cJSON_GetArraySize(list) >= 2;
+    for (int i = 2; ok && i >= 1; --i) {
+        cJSON *v = cJSON_GetArrayItem(list, i);
+        if (!cJSON_IsString(v) || !v->valuestring[0] || !strcmp(v->valuestring, "中国") ||
+            !text_ok(v->valuestring, capacity, false)) continue;
+        snprintf(city, capacity, "%s", v->valuestring);
+        break;
+    }
+    cJSON_Delete(root);
+    // 「市」「省」在 UTF-8 里各占三字节，且都以 0xe5 开头，按字节截断是安全的。
+    // 市 and 省 are three bytes each in UTF-8, so trimming by byte count stays on a boundary.
+    static const char *const suffixes[] = {"市", "省"};
+    size_t len = strlen(city);
+    for (unsigned i = 0; i < sizeof(suffixes) / sizeof(suffixes[0]); ++i) {
+        size_t n = strlen(suffixes[i]);
+        if (len > n && !memcmp(city + len - n, suffixes[i], n)) { city[len - n] = 0; break; }
+    }
+    return city[0] != 0;
+}
 bool weather_forecast_valid(const weather_forecast_t *f, int64_t now) {
     if (!f || !weather_clock_valid(now) || !weather_location_valid(&f->location) ||
         f->stale > 1 ||

@@ -143,14 +143,10 @@ static void app_reading_journal_record(const char *path,const char *title,uint32
 }
 static void e0470_page_turn_release(void){}
 static void invalidate_prep(void){assert(!prefetch_borrowed);}
-<<<<<<< HEAD
-=======
-static void dictionary_cancel(void){}
 static unsigned excerpt_begins;
 static void book_excerpt_begin(const char *path){assert(!prefetch_borrowed&&s_reader_session.content.utf8&&!strcmp(path,s_reader_session.book.path));++excerpt_begins;}
 static bool book_excerpt_flush(const char *path){(void)path;return true;}
 static void book_excerpt_reset(void){}
->>>>>>> d4212af (新增（书摘）：随已显示阅读进度更新首页短句)
 static void reader_bind_chapter(void){s_text=s_reader_session.content.utf8;}
 static void release_page_images(void){s_page_images=NULL;}
 bool book_progress_load(const char *path,uint32_t size,book_progress_t *out){(void)path;++persist_calls;event('P');if(!has_persisted||persisted.file_size!=size)return false;*out=persisted;return true;}

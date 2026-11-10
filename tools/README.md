@@ -11,12 +11,8 @@ Run commands from the repository root and keep outputs in ignored build director
 | 阅读手账 / Reading journal | `python3 tools/run_reader_baseline.py journal journal_reader journal_ui` | 当月模型、双快照/损坏恢复、跨日/月、真实阅读计时及原生页面交互；不接设备。/ Monthly model, dual snapshots/recovery, rollovers, actual reader timing and native page interactions without hardware. |
 | 手账预览 / Journal preview | `python3 tools/reading_journal_ui_host_test.py --output build/reading-journal-native` | 实际内置字库与4bpp绘制，导出两槽组件、日历、空/长/极值状态；逐像素校验六幅105×81图以2倍整数显示的36种状态，并检查打包可复现性；图片用样例数据。/ Built-in fonts and real 4bpp drawing export both slots, calendar and empty/long/extreme states; verify 36 exact source-pixel comparisons at integer 2x plus reproducible packing, using fixtures. |
 | 手账插画 / Journal scenes | `python3 tools/generate_reading_scenes.py --check` | 核对批准PNG与固定4bpp资源表；去掉`--check`重新生成，来源和许可见素材目录。/ Verify approved PNGs against fixed 4bpp assets; omit --check to regenerate, retaining the source manifest/licenses. |
-<<<<<<< HEAD
 | 首页组件 / Home widgets | `python3 tools/dashboard_home_host_test.py` | 真实封面灰阶/1bpp/占位绘制、上下布局、按下仅改变外缘黑白像素、长按/取消/滑出/点按与局部刷新；保留 ASan/UBSan，不能替代实屏验收。/ Real gray/1bpp/placeholder covers, both layouts, binary-only margin feedback, hold/cancel/drag/tap and isolated updates with ASan/UBSan, not panel acceptance. |
-=======
-| 首页组件 / Home widgets | `python3 tools/dashboard_home_host_test.py` | 真实封面灰阶/1bpp/占位、上下布局与按压交互；打卡独立更新、失败重试及组件刷新排队；保留 ASan/UBSan，不能替代实屏验收。/ Real covers/layouts/press interactions, independent streak updates, retry and queued widget refreshes with ASan/UBSan, not panel acceptance. |
 | 阅读书摘 / Reading excerpts | `python3 tools/run_reader_baseline.py excerpt chapter open` | 确认显示后每前进4页换句、重开/重绘稳定、跨页整句、去重/过滤、跳转隔离、无逐页IO与双副本故障/旧缓存迁移，含ASan/UBSan；不接设备。/ Confirmed-output cadence, stable reopen/redraw, complete spanning sentences, dedup/filters, jump isolation, memory-only observation, checked-copy faults and legacy migration with ASan/UBSan; no hardware. |
->>>>>>> d4212af (新增（书摘）：随已显示阅读进度更新首页短句)
 | 目录与依赖 / Structure | `python3 tools/check_architecture.py` | 检查模块依赖、构建清单和测试入口。/ Check module boundaries, build registration and test entry points. |
 | 完整阅读回归 / Reader regression | `python3 tools/run_reader_baseline.py` | 统一执行阅读、字体、显示、存储、OTA 与应用循环回归，保留 ASan/UBSan。/ Run reader/font/display/storage/OTA/app-loop suites with ASan/UBSan. |
 | 指定领域 / Selected suites | `python3 tools/run_reader_baseline.py session chapter open turn reflow` | 只执行指定领域；完整列表见 `--help`。/ Run selected domains; see --help for all suites. |

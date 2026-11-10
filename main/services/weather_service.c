@@ -5,6 +5,7 @@
  * Frozen: Never steal transfer/update sessions; cancel and join before exit, lock, shutdown or quick WiFi.
  */
 #include "weather_service.h"
+#include "city_coords.h"
 #include "esp_crt_bundle.h"
 #include "esp_heap_caps.h"
 #include "esp_http_client.h"
@@ -24,6 +25,17 @@
 #include <string.h>
 #include <strings.h>
 #include <time.h>
+
+// 分阶段耗时打点：只在目标固件启用，宿主机测试没有 esp_log，宏展开为空。
+// Phase timing traces: target firmware only; host tests have no esp_log, so the macro is empty.
+#ifdef ESP_PLATFORM
+#include "esp_log.h"
+static int64_t s_trace_t0;
+#define WEATHER_TRACE(phase) do { if (s_trace_t0) ESP_LOGW("weather", "%s +%lldms", phase, \
+    (long long)((esp_timer_get_time() - s_trace_t0) / 1000)); } while (0)
+#else
+#define WEATHER_TRACE(phase) do { } while (0)
+#endif
 
 #ifndef CONFIG_WEATHER_GEOCODING_ORIGIN
 #define CONFIG_WEATHER_GEOCODING_ORIGIN "https://geocoding-api.open-meteo.com"
@@ -220,6 +232,7 @@ static bool http_get(const char *url, char *body, weather_clock_t *response_cloc
         if (opened != ESP_ERR_HTTP_EAGAIN) break;
         vTaskDelay(pdMS_TO_TICKS(20));
     }
+    WEATHER_TRACE("  http connected");
     if (!cancelled() && opened == ESP_OK) {
         int64_t until = esp_timer_get_time() + WEATHER_RESPONSE_US;
         int64_t length = -1;
@@ -315,6 +328,29 @@ static bool geocode_lookup(char *body, const char *escaped, weather_location_t *
     }
     return true;
 }
+// 内置城市坐标：命中就省掉一次跨境地理编码请求，实测可省约 1.9 秒。
+// 只做精确同名匹配，不做模糊或前缀匹配——宁可多走一次网络，也不猜错城市。
+// Built-in city coordinates: an exact hit skips one cross-border geocoding round trip, measured
+// at roughly 1.9 s. Only exact names match; a miss goes to the network rather than guessing.
+static bool city_coords_lookup(const char *name, weather_location_t *out) {
+    if (!name || !out || !name[0]) return false;
+    for (size_t i = 0; i < sizeof(city_coords) / sizeof(city_coords[0]); ++i) {
+        if (strcmp(city_coords[i].name, name)) continue;
+        weather_location_t v;
+        memset(&v, 0, sizeof(v));
+        snprintf(v.id, sizeof(v.id), "C%03u", (unsigned)i);
+        snprintf(v.name, sizeof(v.name), "%s", city_coords[i].name);
+        snprintf(v.admin1, sizeof(v.admin1), "%s", city_coords[i].admin1);
+        snprintf(v.admin2, sizeof(v.admin2), "%s", city_coords[i].admin2);
+        snprintf(v.country, sizeof(v.country), "%s", "中国");
+        snprintf(v.timezone, sizeof(v.timezone), "%s", "Asia/Shanghai");
+        v.lat = city_coords[i].lat; v.lon = city_coords[i].lon;
+        if (!weather_location_valid(&v)) return false;
+        *out = v;
+        return true;
+    }
+    return false;
+}
 // 「定位」：先用公网 IP 的城市名，再交给地理编码解析成带坐标的城市。
 // 任何一步失败都回退到手动选城，绝不臆测一个城市；候选数组放 PSRAM，避免占任务栈。
 // Locate resolves the city name from the public IP, then geocodes it into a coordinate-bearing
@@ -325,18 +361,27 @@ static bool locate_city(char *body, weather_location_t *out) {
     char city[65], escaped[577], url[768];
     if (snprintf(url, sizeof(url), "%s/json", CONFIG_WEATHER_IP_ORIGIN) >= (int)sizeof(url)) return false;
     if (!http_get(url, body, NULL)) return false;
+    WEATHER_TRACE("ip lookup");
     if (!weather_ip_city_parse(body, strlen(body), city, sizeof(city))) return false;
+    // 表内城市直接取坐标，省掉一次跨境地理编码；表外才联网解析。
+    // A table hit yields coordinates without another cross-border lookup; only misses go online.
+    if (city_coords_lookup(city, out)) { WEATHER_TRACE("city table"); return true; }
     if (!weather_url_encode(city, escaped, sizeof(escaped))) return false;
     weather_location_t *hits = heap_caps_malloc(5 * sizeof(*hits), MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     if (!hits) return false;
     unsigned count = 0;
     bool ok = geocode_lookup(body, escaped, hits, 5, &count) && count > 0;
+    WEATHER_TRACE("geocode");
     if (ok) *out = hits[0];
     heap_caps_free(hits);
     return ok;
 }
 static void weather_worker(void *arg) {
     (void)arg; bool owned = false;
+#ifdef ESP_PLATFORM
+    s_trace_t0 = esp_timer_get_time();
+#endif
+    WEATHER_TRACE("worker start");
     char *body = heap_caps_malloc(WEATHER_BODY_LIMIT + 1, MALLOC_CAP_SPIRAM | MALLOC_CAP_8BIT);
     result_notice(APP_WEATHER_FAILED, "天气更新失败，可稍后重试");
     if (!body || cancelled()) goto done;
@@ -361,6 +406,7 @@ static void weather_worker(void *arg) {
         vTaskDelay(pdMS_TO_TICKS(100));
     }
     if (cancelled()) goto done;
+    WEATHER_TRACE("wifi ready");
     // Open-Meteo 是公开服务，没有平台侧的开关与就绪探测，直接进入具体请求。
     // Open-Meteo is a public service with no platform-side enable/ready probe, so go straight
     // to the concrete request.
@@ -403,6 +449,7 @@ static void weather_worker(void *arg) {
                  CONFIG_WEATHER_FORECAST_ORIGIN, city.lat, city.lon) >= (int)sizeof(url)) goto done;
     weather_clock_t clock = s_requested_clock, response_clock;
     if (!http_get(url, body, &response_clock)) goto done;
+    WEATHER_TRACE("forecast");
     // 仅接受同一可信HTTPS预报的时间；旧响应不能倒退参照或延长原始有效期。
     // Trust time only from the same HTTPS forecast; older responses cannot roll back time or extend expiry.
     if (response_clock.utc && (!clock.utc || clock_now(&response_clock) > clock_now(&clock))) clock = response_clock;

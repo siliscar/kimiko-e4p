@@ -30,6 +30,12 @@
     "{\"ret\":\"ok\",\"data\":{\"ip\":\"203.0.113.9\"," \
     "\"location\":[\"中国\",\"浙江省\",\"杭州市\",\"\",\"电信\"]}}"
 
+// 不在内置坐标表里的地名，用来验证「表外才联网做地理编码」这条分支。
+// A place absent from the built-in coordinate table, exercising the geocoding fallback branch.
+#define WEATHER_TEST_IP_LOCATION_UNKNOWN \
+    "{\"ret\":\"ok\",\"data\":{\"ip\":\"203.0.113.9\"," \
+    "\"location\":[\"中国\",\"浙江省\",\"千岛湖\",\"\",\"电信\"]}}"
+
 // 两日预报样本：2 → 多云(101)，61 → 小雨(305)；日出日落为本地时间，需按 +08 折成 UTC。
 // Two-day forecast: 2 → partly cloudy (101), 61 → light rain (305); sunrise/sunset are local
 // wall-clock strings that must be converted to UTC with the +08 offset.

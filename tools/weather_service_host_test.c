@@ -207,18 +207,26 @@ int main(void) {
     assert(!s_view.enabled&&!s_view.has_city&&!requests&&s_view.auto_refresh);
     assert(!app_weather_poll(false)&&!requests);
 
-    // 2) 没有城市时先用出口 IP 自动选城，再取预报；定位按钮复用同一条链路。
-    // 2) With no city the worker locates one from the egress IP, then fetches the forecast; the
-    // locate action reuses exactly that path.
+    // 2) 没有城市时先用出口 IP 自动选城，再取预报；表内城市不花一次地理编码往返。
+    // 2) With no city the worker locates one from the egress IP, then fetches the forecast; a city
+    // present in the built-in table never costs a geocoding round trip.
     unsigned ip_before=ip_calls,search_before=search_calls,forecast_before=forecast_calls;
     request(APP_WEATHER_FETCH,NULL);
-    assert(ip_calls==ip_before+1&&search_calls==search_before+1&&forecast_calls==forecast_before+1);
+    assert(ip_calls==ip_before+1&&search_calls==search_before&&forecast_calls==forecast_before+1);
     assert(s_view.state==APP_WEATHER_READY&&s_view.has_city&&s_view.has_forecast);
-    assert(!strcmp(s_view.city.name,"杭州")&&!strcmp(s_view.city.id,"OM1808926"));
+    assert(!strcmp(s_view.city.name,"杭州")&&s_view.city.id[0]=='C');
     reset();
     ip_before=ip_calls;
     request(APP_WEATHER_LOCATE,NULL);
     assert(ip_calls==ip_before+1&&s_view.has_city&&s_view.state==APP_WEATHER_READY);
+    // 表外地名才走地理编码；夹具把它解析成杭州，城市来自网络结果。
+    // A name outside the table falls back to geocoding; the fixture resolves it to 杭州.
+    reset();
+    ip_body=WEATHER_TEST_IP_LOCATION_UNKNOWN;
+    search_before=search_calls;forecast_before=forecast_calls;
+    request(APP_WEATHER_LOCATE,NULL);
+    assert(search_calls==search_before+1&&forecast_calls==forecast_before+1);
+    assert(s_view.has_city&&!strcmp(s_view.city.id,"OM1808926"));
     // IP 服务报错时回退到手动选城，不臆测城市，也不继续查预报。
     // When the IP service reports an error the worker asks for a manual choice instead of
     // inventing a city, and never moves on to the forecast.
@@ -228,9 +236,10 @@ int main(void) {
     request(APP_WEATHER_LOCATE,NULL);
     assert(ip_calls==ip_before+1&&forecast_calls==forecast_before);
     assert(s_view.state==APP_WEATHER_CITY_REQUIRED&&!s_view.has_city);
-    // 城市名在地理编码里没有中国大陆结果时同样回退。
-    // The same fallback applies when the city name yields no mainland geocoding hit.
+    // 表外地名在地理编码里也没有中国大陆结果时同样回退。
+    // The same fallback applies when an off-table name yields no mainland geocoding hit.
     reset();
+    ip_body=WEATHER_TEST_IP_LOCATION_UNKNOWN;
     geocoding_body="{\"results\":[]}";
     forecast_before=forecast_calls;
     request(APP_WEATHER_LOCATE,NULL);
@@ -326,7 +335,24 @@ int main(void) {
     cancel_read=true;request(APP_WEATHER_FETCH,NULL);
     assert(!s_view.has_forecast&&!cache_size);
 
-    // 7) 可信源校验：非配置主机一律拒绝，避免被拼到任意地址。
+    // 7) 内置坐标表整表合法，且只做精确匹配。
+    // 7) Every built-in coordinate row validates, and lookups are exact-name only.
+    assert(sizeof(city_coords)/sizeof(city_coords[0])>=290);
+    for(size_t i=0;i<sizeof(city_coords)/sizeof(city_coords[0]);++i) {
+        weather_location_t v;
+        assert(city_coords_lookup(city_coords[i].name,&v));
+        assert(!strcmp(v.name,city_coords[i].name));
+        assert(v.lat==city_coords[i].lat&&v.lon==city_coords[i].lon);
+        assert(weather_location_valid(&v));
+    }
+    weather_location_t probe_city;
+    assert(city_coords_lookup("杭州",&probe_city)&&probe_city.lat>30&&probe_city.lat<31);
+    assert(city_coords_lookup("乌鲁木齐",&probe_city)&&probe_city.lon<88);
+    assert(!city_coords_lookup("千岛湖",&probe_city));
+    assert(!city_coords_lookup("杭州 ",&probe_city)&&!city_coords_lookup("",&probe_city)&&
+           !city_coords_lookup(NULL,&probe_city));
+
+    // 8) 可信源校验：非配置主机一律拒绝，避免被拼到任意地址。
     // 7) Trusted-origin guard: any host outside the configured origins is refused.
     assert(url_trusted("https://fc.test/v1/forecast?latitude=1&longitude=2"));
     assert(url_trusted("https://geo.test/v1/search?name=x"));

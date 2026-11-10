@@ -31,7 +31,7 @@
 #ifdef ESP_PLATFORM
 #include "esp_log.h"
 static int64_t s_trace_t0;
-#define WEATHER_TRACE(phase) do { if (s_trace_t0) ESP_LOGW("weather", "%s +%lldms", phase, \
+#define WEATHER_TRACE(phase) do { if (s_trace_t0) ESP_LOGI("weather", "%s +%lldms", phase, \
     (long long)((esp_timer_get_time() - s_trace_t0) / 1000)); } while (0)
 #else
 #define WEATHER_TRACE(phase) do { } while (0)

@@ -13,6 +13,7 @@ User-visible changes by release; see [README](../README.md) for usage.
 - 「定位」恢复可用：向 `myip.ipip.net` 询问出口 IP 所属城市，剥掉「市/省」后缀后走地理编码取坐标；每次开机最多自动尝试一次，失败仍提示手动选城。/ Locate works again: the device asks `myip.ipip.net` which city the egress IP belongs to, trims the 市/省 suffix and geocodes it, at most once per boot; failures still ask for a manual choice.
 - 城市搜索在首查为空时补「市」重查一次，地级及以上城市覆盖率由 73% 提升到 89.6%。/ City search retries once with a 市 suffix when the first pass is empty, lifting prefecture-level coverage from 73% to 89.6%.
 - 九宫格/全键盘词库补入 293 个中国地级及以上城市，输入 `hangzhou` 直接出「杭州」，不再需要先选「杭」再选「州」；同音城市按常用度排序（苏州在宿州前、福州在抚州前）。/ The nine-key and QWERTY lexicons gain 293 Chinese prefecture-level cities, so `hangzhou` yields 「杭州」 directly instead of requiring two single-character picks; homophones are ordered by common usage (苏州 before 宿州, 福州 before 抚州).
+- 定位改用内置城市坐标表：297 个地级及以上城市精确命中即取坐标，不再每次跨境做地理编码，实测从 8521ms 降到 6632ms；表外地名仍回落到联网检索。/ Locate now reads a built-in table of 297 prefecture-level city coordinates, so an exact hit skips the cross-border geocoding call and the measured action drops from 8521 ms to 6632 ms; off-table names still fall back to the geocoder.
 
 ## v1.0.6 · 2026-11-06
 

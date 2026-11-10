@@ -48,7 +48,7 @@ static unsigned s_widget_dirty;
 static int s_streak;
 typedef struct {bool enabled;} weather_t;
 static weather_t weather;
-enum {APP_HOME_WIDGET_WEATHER};
+enum {APP_HOME_WIDGET_READING,APP_HOME_WIDGET_WEATHER,APP_HOME_WIDGET_EMPTY,APP_HOME_WIDGET_JOURNAL};
 static void app_weather_init(void){}
 static void app_home_components_init(bool on){(void)on;}
 static weather_t *app_weather_view(void){return &weather;}
@@ -105,5 +105,8 @@ with tempfile.TemporaryDirectory(prefix="home-recent-") as temp:
     source = Path(temp) / "test.c"
     binary = Path(temp) / "test"
     source.write_text(UNIT, encoding="utf-8")
-    subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-fsanitize=address,undefined", str(source), "-o", str(binary)], check=True)
+    # 宿主桩允许未使用：本文件只验证取词与组件选择，桩多寡不影响结论。
+    # Unused host stubs are expected: this file checks recent-text selection, not stub coverage.
+    subprocess.run(["cc", "-std=c11", "-Wall", "-Wextra", "-Werror", "-Wno-unused-variable", "-Wno-unused-function",
+                    "-fsanitize=address,undefined", str(source), "-o", str(binary)], check=True)
     subprocess.run([str(binary)], check=True)

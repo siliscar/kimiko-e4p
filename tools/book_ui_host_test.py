@@ -316,6 +316,22 @@ static int book_chapter_image_dimensions(size_t chapter,const char *name,unsigne
 }
 static void vTaskDelay(unsigned ticks){(void)ticks;}
 static void release_page_images(void){}
+static void release_warm_images(void){}
+// 旋转与进度条是本地新增依赖，宿主只需要它们存在。
+// Rotation and the progress bar are local dependencies; the host only needs them to exist.
+static bool reader_orientation_sync(void){return false;}
+static bool reader_orientation_portrait(void){return false;}
+static bool s_reader_progress_bar = true;
+static bool app_settings_reader_progress_bar(void){return true;}
+static bool test_book_styles=true,test_layout_book_styles=true;
+static bool app_settings_book_styles(void){return test_book_styles;}
+static bool app_settings_set_book_styles(bool enabled){test_book_styles=enabled;return true;}
+static void book_layout_set_book_styles(bool enabled){test_layout_book_styles=enabled;}
+static int reader_footer_height(void);
+#define READER_WIDTH 684
+#define READER_HEIGHT 1216
+#define READER_BAR_TOP 1096
+#define READER_FOOTER_PROGRESS_SPACE 19
 static char s_reader_notice[96];static int64_t s_reader_notice_until;
 static int64_t esp_timer_get_time(void){return 1000000;}
 static void prepare_inline_image(void){test_image_preparations++;}
@@ -492,7 +508,7 @@ unit += f'\n#include "{source.parents[1] / "book/reader_reflow.h"}"\n'
 unit += "static const reader_reflow_t *reader_reflow_context(void);\n"
 from book_shelf_test_code import shelf_hooks, service_hooks, service_unhooks, shelf_checks
 unit += shelf_hooks
-for name in ("inline_ink_gray", "reader_margin_level", "reader_margin_value", "slider_index", "reader_margin_input", "reader_area", "reader_fullscreen_progress_area", "body_rect_for_tracking", "body_rect", "progress_rect", "copy_text", "clean_filename", "reader_footer_strip_number", "favorite_key", "favorite_read_handle", "favorite_save", "shelf_hidden_key", "shelf_hidden_read_handle", "shelf_hidden_load", "shelf_hidden_save", "shelf_rows", "row_rect", "shelf_category_add", "shelf_category_init", "shelf_query", "shelf_category_remember", "shelf_category_restore", "shelf_categories_recount", "sort_shelf", "delete_retry_find", "shelf_scan_cancel", "shelf_scan_context", "shelf_backfill_read_books", "scan_shelf", "refresh_cached_progress",
+for name in ("inline_ink_gray", "reader_margin_level", "reader_margin_value", "slider_index", "reader_margin_input", "reader_area", "reader_footer_height", "reader_fullscreen_progress_area", "body_rect_for_tracking", "body_rect", "progress_rect", "copy_text", "clean_filename", "reader_footer_strip_number", "favorite_key", "favorite_read_handle", "favorite_save", "shelf_hidden_key", "shelf_hidden_read_handle", "shelf_hidden_load", "shelf_hidden_save", "shelf_rows", "row_rect", "shelf_category_add", "shelf_category_init", "shelf_query", "shelf_category_remember", "shelf_category_restore", "shelf_categories_recount", "sort_shelf", "delete_retry_find", "shelf_scan_cancel", "shelf_scan_context", "shelf_backfill_read_books", "scan_shelf", "refresh_cached_progress",
              "pending_find", "pending_reserve", "pending_restore", "pending_discard", "pending_mark_latest", "pending_drop_invalidated", "pending_flush", "reader_page_offset", "save_progress", "retry_progress", "layout_name", "manage_panel", "manage_rect", "batch_rect", "manage_back_rect", "bulk_filter_rect", "bulk_nav_rect", "bulk_nav_hit", "leaves", "selected_count", "clear_selection", "toggle_selection", "select_page", "bookmark_compact", "search_begin", "refresh_search_matches", "search_finish", "refresh_capacity", "shelf_management_context", "shelf_managed_removed", "manage_apply", "manage_action", "batch_apply", "batch_action", "bulk_turn_page", "bulk_finish", "bulk_action", "bulk_control_at", "menu_handle_enabled", "reader_manual_refresh", "apply_reader_option", "reader_return", "toggle_reader_tools_panel", "reader_key_action", "middle_short_press", "middle_pending_tick", "on_key", "on_key_long", "draw_wrapped_name", "open_requested_book", "on_enter", "book_on_exit"):
     unit += function(name) + "\n"
 for name in ("book_remote_direction", "shelf_turn_page", "shelf_page_arrow_rect", "reader_swipe_direction"):

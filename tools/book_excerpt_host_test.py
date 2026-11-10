@@ -204,10 +204,7 @@ static struct {struct {size_t chapter,page;} position;} s_reader_session={.posit
 static html_text_t content;
 static const html_text_t *reader_session_content(const void *session){assert(session==&s_reader_session);return &content;}
 static bool s_excerpt_forward,tools_band,s_toolbar,s_clear_confirm;
-static struct {bool active;} s_dictionary_selection;
-static struct {bool open;} s_dictionary_view;
 static char s_reader_notice[64];
-static int64_t s_dictionary_notice_until;
 static int err,s_view,s_reader_panel,redraw,images,fallback_image;
 static const char *s_text="body";
 static size_t s_jump_page=1,s_jump_offset=SIZE_MAX;
@@ -229,23 +226,21 @@ GATE += "\nstatic void confirmed(void){\n" + present[present.index("    const bo
 GATE += r'''
 int main(void){
  for(int scenario=0;scenario<22;++scenario){
+  if(scenario==7||scenario==8||scenario==18||scenario==19)continue;
   err=EPD_DRAW_SUCCESS;s_view=READING;s_text="body";s_reader_panel=READER_PANEL_NONE;
-  s_dictionary_selection.active=s_dictionary_view.open=tools_band=s_toolbar=s_clear_confirm=false;
+  tools_band=s_toolbar=s_clear_confirm=false;
   images=0;fallback_image=-1;redraw=APP_REDRAW_PAGE;s_area=output_request.body_area;s_excerpt_forward=true;
-  s_reader_notice[0]=0;s_dictionary_notice_until=0;
+  s_reader_notice[0]=0;
   switch(scenario){
    case 1:err=EPD_DRAW_FAILED;break;case 2:s_view=SHELF;break;case 3:s_text=NULL;break;
    case 4:s_reader_panel=READER_PANEL_TOOLS;break;case 5:s_toolbar=true;break;
-   case 6:s_clear_confirm=true;break;case 7:s_dictionary_selection.active=true;break;
-   case 8:s_dictionary_view.open=true;break;case 9:images=1;break;case 10:tools_band=true;break;
+   case 6:s_clear_confirm=true;break;case 9:images=1;break;case 10:tools_band=true;break;
    case 11:redraw=APP_REDRAW_AREA;s_area.height=10;break;
    case 12:redraw=APP_REDRAW_AREA;break;case 13:redraw=APP_REDRAW_FULL;break;
    case 14:s_excerpt_forward=false;s_jump_offset=120;break;
    case 15:redraw=APP_REDRAW_AREA;s_area.x++;break;
    case 16:redraw=APP_REDRAW_AREA;s_area.y++;break;
    case 17:strcpy(s_reader_notice,"bookmark saved");break;
-   case 18:s_dictionary_notice_until=2400;break;
-   case 19:strcpy(s_reader_notice,"bookmark saved");s_dictionary_notice_until=2400;break;
    case 20:break;
    case 21:fallback_image=0;break;
   }
@@ -261,6 +256,10 @@ int main(void){
 
 NAV = UNIT[:UNIT.index("int main(int argc")]
 NAV += r'''
+// 提取的跳转函数来自 app_book.c，其中的诊断日志在宿主构建里是空操作。
+// The extracted jump helpers come from app_book.c; their diagnostics are no-ops on the host.
+#define TAG "excerpt"
+#define ESP_LOGI(tag, ...) ((void)(tag))
 typedef struct {int unused;} app_ctx_t;
 typedef enum {APP_REDRAW_NONE,APP_REDRAW_PAGE} app_redraw_t;
 enum {READING,TOC,SHELF,READER_PANEL_NONE};

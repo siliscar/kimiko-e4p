@@ -123,6 +123,7 @@ static void lock_draw(void){assert(!locks);++locks;}
 static void unlock_draw(void){assert(locks==1);--locks;test_zero_width=false;}
 static void invalidate_prep(void){++invalidates;}
 static void release_page_images(void){++releases;}
+static void release_warm_images(void){}
 static void prepare_inline_image(void){++prepared;}
 static void save_progress(void){++saves;}
 static void refresh_chapter_lead(void){bool fail=build_attempt<2&&(fail_mask&(1u<<build_attempt));++build_attempt;book_layout_set_chapter_lead(0,fail?10000:0);}

@@ -16,6 +16,8 @@ unit = r'''
 #include "reader_orientation.h"
 static reader_orientation_t s_orientation;
 static int64_t s_orientation_retry_ms;
+static char s_text_storage[1];
+static char *s_text = s_text_storage;
 static display_orientation_t direction;
 static unsigned rotations;
 display_orientation_t display_orientation_get(void){return direction;}
@@ -83,14 +85,13 @@ int main(void){
  assert(rotations==1&&direction==DISPLAY_ORIENTATION_RIGHT&&s_orientation.locked==direction&&!turns&&sensor_powered);
  next_sample=(sc7a20h_sample_t){.x_mg=1000};touch.touched=true;
  for(int t=28000;t<=29000;t+=50){ctx.now_ms=t;assert(reader_shake_tick(&ctx)==APP_REDRAW_NONE);}
- touch.touched=false;s_dictionary_view.open=true;
- for(int t=30000;t<=31000;t+=50){ctx.now_ms=t;assert(reader_shake_tick(&ctx)==APP_REDRAW_NONE);}
+ touch.touched=false;
  assert(rotations==1&&!s_orientation.candidate);
- s_dictionary_view.open=false;s_orientation.automatic=false;ctx.now_ms=32000;reader_shake_tick(&ctx);assert(!sensor_powered);
+ s_orientation.automatic=false;ctx.now_ms=32000;reader_shake_tick(&ctx);assert(!sensor_powered);
  const int expected[][2]={{-100,200},{200,100},{100,-200},{-200,-100}};
  sc7a20h_sample_t axes={100,200,300};
  for(int d=0;d<4;++d){direction=d;int x,y,z;reader_shake_screen_axes(&axes,&x,&y,&z);assert(x==expected[d][0]&&y==expected[d][1]&&z==300);}
- puts("PASS: auto-only sensor ownership, stable reflow request, touch/dictionary suppression, lock sleep and shake axes in all orientations");
+ puts("PASS: auto-only sensor ownership, stable reflow request, touch suppression, lock sleep and shake axes in all orientations");
 }
 '''
 with tempfile.TemporaryDirectory(dir=ROOT/'build') as folder:

@@ -152,15 +152,8 @@ static app_reader_slot_item_t app_settings_reader_chrome_item(unsigned bar,unsig
 }
 static void ui_nav_battery_draw(uint8_t *fb,int x,int y){(void)fb;(void)x;(void)y;}
 static void reader_chrome_data(reader_chrome_data_t *data){*data=(reader_chrome_data_t){.title="图书",.chapter="第2章【灵葫芦】",.page=2,.page_count=47,.percent=20,.clock="12:00",.date="11-07"};}
-static int64_t s_dictionary_notice_until;
 typedef struct {int unused;} book_layout_glyph_t;
-static struct {bool active;char query[8];} s_dictionary_selection;
-static int s_dictionary_view;
-static struct {char query[8];} s_dictionary_result;
 static const book_layout_glyph_t *book_layout_glyphs(size_t page,size_t *count){(void)page;*count=0;return NULL;}
-static void ui_reader_dictionary_notice(uint8_t *fb){(void)fb;}
-#define ui_reader_dictionary_selection(...) ((void)glyphs,(void)count)
-#define ui_reader_dictionary_draw(...) ((void)s_dictionary_view,(void)s_dictionary_result)
 '''
 for name in ('chrome_copy', 'cut_last_utf8', 'slot_text', 'chrome_face_ready', 'chrome_face_width',
              'chrome_face_draw', 'slot_measure', 'slot_trim', 'layout_slots', 'slot_place', 'reader_chrome_draw_footer_row'):

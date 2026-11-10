@@ -33,7 +33,8 @@ with tempfile.TemporaryDirectory(prefix="display-contract-") as folder:
     rectangle = re.search(r"typedef struct \{[^{}]*\} EpdRect;", epd).group(0)
     state = re.search(r"typedef struct EpdiyHighlevelState \{[^{}]*\} EpdiyHighlevelState;", high).group(0)
     (work / "epdiy.h").write_text("#pragma once\n#include <stdint.h>\n#include <stdbool.h>\n"
-                                 "typedef struct EpdWaveform EpdWaveform;\n" + rectangle + "\n" + state)
+                                 "typedef struct EpdWaveform EpdWaveform;\n" + rectangle + "\n" + state +
+                                 "\nint epd_rotated_display_width(void);\nint epd_rotated_display_height(void);\n")
     unit = r'''
 #include <assert.h>
 #include <limits.h>

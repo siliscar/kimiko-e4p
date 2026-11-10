@@ -237,7 +237,13 @@ void book_excerpt_observe(const html_text_t *text, size_t chapter, size_t begin,
     if (same && (s_value.text[0] || (!changed && was_visible))) return;
     if (s_value.text[0] && s_value.pages < BOOK_EXCERPT_INTERVAL) return;
     char candidate[BOOK_EXCERPT_CAP];
-    if (!select_sentence(text, s_visible_begin, end, candidate)) return;
+    // 先只看当前这一页；这页挑不出可用整句（例如整页都在同一句话里）才回落到
+    // 「上次换摘以来的连续页」，避免摘录落在读者已经翻过去的前几页上。
+    // Try the page on screen first; fall back to the contiguous pages since the last refresh
+    // only when this page yields no usable sentence, so the quote is not taken from pages the
+    // reader has already left behind.
+    if (!select_sentence(text, begin, end, candidate) &&
+        !select_sentence(text, s_visible_begin, end, candidate)) return;
     memcpy(s_value.text, candidate, strlen(candidate) + 1);
     memmove(s_value.history + 1, s_value.history, (EXCERPT_HISTORY - 1) * sizeof(s_value.history[0]));
     s_value.history[0] = checksum(candidate); s_value.pages = 0;

@@ -2757,11 +2757,18 @@ void ttf_draw_text_px_fitted(
     cursor = text;
     while (*cursor) {
         run_apply((size_t)(cursor - text));
+        // 正文整行两端对齐走的就是这里：段内字号与基线必须跟排版一致，否则字会按正文号
+        // 落墨、链接矩形却按小字号算，点角标就点不中。
+        // Justified body lines are painted here, so the span size and baseline must match the
+        // layout: otherwise glyphs ink at body size while link rects are measured at the smaller
+        // size, and taps on a marker miss.
+        const int px = s_run_px ? s_run_px : pixel_height;
+        const int rise = s_run_rise;
         uint32_t cp = decode_utf8(&cursor);
-        const glyph_entry_t* glyph = get_glyph(cp, pixel_height);
+        const glyph_entry_t* glyph = get_glyph(cp, px);
         if (glyph && glyph->bitmap) {
             for (int gy = 0; gy < glyph->height; ++gy) {
-                int yy = y - glyph->top + gy;
+                int yy = y - rise - glyph->top + gy;
                 for (int gx = 0; gx < glyph->width; ++gx) {
                     uint8_t alpha = glyph->bitmap[gy * glyph->width + gx];
                     if (alpha) epd_draw_pixel(cursor_x + glyph->left + gx, yy,

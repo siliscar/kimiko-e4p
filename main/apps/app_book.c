@@ -3178,6 +3178,15 @@ static bool note_is_marker(const char *text, size_t len) {
              (text[i + 1] == 0x80 && text[i + 2] == 0xbb))) { i += 3; continue; }
         if (c == 0xe3 && i + 2 < end && (unsigned char)text[i + 1] == 0x89 &&
             (unsigned char)text[i + 2] >= 0xa1) { i += 3; continue; }
+        // 全角与中文括号：［］(EF BC BB/BD)、【】〔〕〖〗(E3 80 90..95) 同样是标记字符。
+        if (c == 0xef && i + 2 < end && (unsigned char)text[i + 1] == 0xbc &&
+            ((unsigned char)text[i + 2] == 0xbb || (unsigned char)text[i + 2] == 0xbd)) {
+            i += 3; continue;
+        }
+        if (c == 0xe3 && i + 2 < end && (unsigned char)text[i + 1] == 0x80 &&
+            (unsigned char)text[i + 2] >= 0x90 && (unsigned char)text[i + 2] <= 0x95) {
+            i += 3; continue;
+        }
         return false;
     }
     return true;

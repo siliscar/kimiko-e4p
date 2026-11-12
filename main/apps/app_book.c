@@ -3722,12 +3722,47 @@ static void reader_prefetch_idle(app_ctx_t *ctx) {
     }
     reader_prefetch_work_idle(s_reader_session.position.page + 1);
 }
+// 在当前章已解析的锚点表里查 id：锚点表是解析正文时顺手建的，开目录不再重解析章节。
+// Resolve an id in the parsed chapter's anchor table; the table is built while the chapter is
+// parsed, so opening the TOC never re-parses it.
+static size_t toc_anchor_offset(const html_text_t *text, const char *id) {
+    if (!text || !text->anchors || !text->strings || !id || !id[0]) return SIZE_MAX;
+    const size_t len = strlen(id);
+    for (size_t i = 0; i < text->anchor_count; ++i) {
+        const html_anchor_t *anchor = &text->anchors[i];
+        if (anchor->id_len == len && !memcmp(text->strings + anchor->id, id, len)) return anchor->offset;
+    }
+    return SIZE_MAX;
+}
 static size_t current_toc_position(void) {
     const size_t count = book_navigation_count();
     const size_t chapter_now = s_reader_session.position.chapter;
     if (!count) return SIZE_MAX;
     if (s_selected_toc < count && book_navigation_chapter(s_selected_toc) == chapter_now)
         return s_selected_toc;
+    // 精确路径：目录项带锚点且锚点就在已解析的当前章里时，直接比正文偏移。整本一个 spine
+    // 的书里几十条目录项都落在同一章，按页数插值会偏出好几条（实测偏 2 条）。
+    // Exact path: when the entry's anchor lives in the parsed current chapter, compare text
+    // offsets. In single-spine books dozens of entries share one chapter, where page-based
+    // interpolation drifts by several entries (measured two).
+    const html_text_t *content = reader_session_content(&s_reader_session);
+    if (s_text && content && content->anchor_count) {
+        const size_t page_offset = reader_page_offset(s_reader_session.position.page);
+        size_t best = SIZE_MAX, best_offset = 0;
+        for (size_t i = 0; i < count; ++i) {
+            if (book_navigation_chapter(i) != chapter_now) continue;
+            const size_t offset = toc_anchor_offset(content, book_navigation_anchor(i));
+            if (offset == SIZE_MAX || offset > page_offset) continue;
+            if (best == SIZE_MAX || offset >= best_offset) { best = i; best_offset = offset; }
+        }
+        if (best != SIZE_MAX) {
+            ESP_LOGI(TAG, "toc exact entry=%u offset=%zu page_offset=%zu", (unsigned)best,
+                     best_offset, page_offset);
+            return best;
+        }
+    }
+    // 兜底：没有可用锚点时按「本章已读页数」在同章条目间插值。
+    // Fallback: without usable anchors, interpolate over the chapter's entries by pages read.
     // 目录项与章节是「一对多」：分节型目录里同一章会占多条。旧实现固定取该章第一条，
     // 读到章末时目录仍停在章首；这里按「本章已读页数」在其中插值定位。
     // 章节号也不保证单调（EPUB 多层目录会回退），所以遇到更大的章号只跳过，不提前结束。

@@ -23,6 +23,8 @@ typedef struct {
     size_t offset; ///< 相对块起点的字节偏移 / Byte offset from the block start
     size_t len; ///< 字节数 / Byte count
     uint8_t slot; ///< 字体槽，0 为系统字体 / Font slot, 0 for the system face
+    uint8_t size; ///< 字号百分比，0 与 100 都是正文 / Type size in percent; 0 and 100 both mean body size
+    int8_t rise; ///< 相对正文的基线偏移百分比，正数向上 / Baseline shift as a percent of body size, positive up
 } html_run_t;
 
 /// 把 CSS font-family 的名字解析成字体槽；返回 0 表示用系统字体。

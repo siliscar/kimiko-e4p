@@ -15,6 +15,8 @@
 typedef struct {
     uint32_t offset;
     uint8_t slot;
+    uint8_t px;   ///< 0 沿用调用方字号 / 0 keeps the caller's size
+    int8_t rise;  ///< 基线偏移像素 / baseline shift in pixels
 } ttf_run_t;
 void ttf_draw_set_runs(const ttf_run_t* runs, size_t count);
 int ttf_font_select(int slot);

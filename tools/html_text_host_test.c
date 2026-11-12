@@ -269,5 +269,45 @@ int main(void) {
     assert(t.run_count == 0 && t.runs == NULL);
     html_text_free(&t);
 
+
+    // ---- 上下标与字号 run / Superscript, subscript and type-size runs ----
+    // <sup>/<sub> 本身就是字号变化，没有内嵌字体也要记 run。
+    // sup/sub is a size change on its own, so runs are recorded even without embedded faces.
+    t = parse("<p>甲<sup>1</sup>乙<sub>2</sub>丙</p>", "甲1乙2丙");
+    assert(t.blocks[0].run_count == 5);
+    assert(t.runs[0].offset == 0 && t.runs[0].len == 3 && t.runs[0].size == 0 && t.runs[0].rise == 0);
+    assert(t.runs[1].offset == 3 && t.runs[1].len == 1 && t.runs[1].size == 67 && t.runs[1].rise == 33);
+    assert(t.runs[2].offset == 4 && t.runs[2].len == 3 && t.runs[2].size == 0 && t.runs[2].rise == 0);
+    assert(t.runs[3].offset == 7 && t.runs[3].len == 1 && t.runs[3].size == 67 && t.runs[3].rise == -12);
+    assert(t.runs[4].offset == 8 && t.runs[4].len == 3 && t.runs[4].size == 0 && t.runs[4].rise == 0);
+    assert_runs_cover(&t);
+    html_text_free(&t);
+
+    // 行内 style 的 vertical-align / font-size 与 class 规则等价。
+    // Inline vertical-align and font-size behave like a class rule.
+    t = parse("<p>甲<span style='vertical-align:super;font-size:80%'>1</span>乙</p>", "甲1乙");
+    assert(t.blocks[0].run_count == 3);
+    assert(t.runs[1].size == 80 && t.runs[1].rise == 33);
+    assert_runs_cover(&t);
+    html_text_free(&t);
+
+    // class 规则里的字号同样生效；闭标签回退到正文号。
+    // A class rule for the size works too, and closing the element restores the body size.
+    t = parse("<style>.s{font-size:70%}</style><p>甲<span class='s'>1</span>乙</p>", "甲1乙");
+    assert(t.blocks[0].run_count == 3);
+    assert(t.runs[1].size == 70 && t.runs[1].rise == 0);
+    assert(t.runs[2].size == 0);
+    assert_runs_cover(&t);
+    html_text_free(&t);
+
+    // 嵌套：上标里再套下标，闭标签逐层回退。
+    // Nesting: a subscript inside a superscript restores level by level.
+    t = parse("<p>甲<sup>1<sub>2</sub>3</sup>乙</p>", "甲123乙");
+    assert(t.blocks[0].run_count == 5);
+    assert(t.runs[1].rise == 33 && t.runs[2].rise == -12 && t.runs[3].rise == 33);
+    assert(t.runs[4].rise == 0 && t.runs[4].size == 0);
+    assert_runs_cover(&t);
+    html_text_free(&t);
+
     puts("html_text_host_test: PASS");
 }

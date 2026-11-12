@@ -36,10 +36,14 @@ enum {
     CSS_AFTER = 1u << 3,
     CSS_FAMILY = 1u << 4,
     CSS_BACKGROUND = 1u << 5,
+    CSS_VERTICAL = 1u << 6,
+    CSS_SIZE = 1u << 7,
 };
 
 typedef struct {
     uint8_t mask, align, indent, before, after, family;
+    uint8_t vertical; ///< 0 正常 / 1 上标 / 2 下标 / 0 normal, 1 superscript, 2 subscript
+    uint8_t size; ///< 字号百分比，0 继承 / Type size percent, 0 inherits
     const char *background;
     size_t background_len;
 } css_style_t;
@@ -91,6 +95,13 @@ typedef struct {
     // Inline tags switch faces too: record the slot per open depth and fall back on close.
     uint8_t family_at[CSS_ANCESTOR_MAX];
     bool family_rules;
+    // 上下标与字号：同样按深度记，闭标签回退；没有任何字号/vertical-align 声明时不建表。
+    // Superscript and type size follow the same per-depth stack; with no size or
+    // vertical-align declaration anywhere the tables are never touched.
+    uint8_t size_at[CSS_ANCESTOR_MAX], vertical_at[CSS_ANCESTOR_MAX];
+    uint8_t size, run_size, vertical, run_vertical;
+    bool size_rules; ///< CSS 里真的声明过字号/vertical-align / a rule really declares size or vertical-align
+    bool sup_seen; ///< 正文里出现过 sup/sub / the body actually contains sup or sub
 } writer_t;
 
 static unsigned char lower(unsigned char c) {
@@ -123,6 +134,8 @@ static void css_apply(css_style_t* dst, const css_style_t* src) {
     if (src->mask & CSS_BEFORE) dst->before = src->before;
     if (src->mask & CSS_AFTER) dst->after = src->after;
     if (src->mask & CSS_FAMILY) dst->family = src->family;
+    if (src->mask & CSS_VERTICAL) dst->vertical = src->vertical;
+    if (src->mask & CSS_SIZE) dst->size = src->size;
     if (src->mask & CSS_BACKGROUND) {
         dst->background = src->background;
         dst->background_len = src->background_len;
@@ -212,6 +225,23 @@ static void css_declarations(writer_t* w, const char* at, const char* end, css_s
             // Runs start only once a name really resolves; an unmatched family is not worth
             // recording span by span.
             if (style->family != 0) w->family_rules = true;
+        } else if (kn == 14 && !strncasecmp(key, "vertical-align", 14)) {
+            // super / text-top 抬升，sub / text-bottom 下沉，baseline 与其余值归零。
+            // super and text-top rise, sub and text-bottom sink, baseline and the rest clear it.
+            style->vertical = vn == 5 && !strncasecmp(value, "super", 5) ? 1 :
+                              vn == 8 && !strncasecmp(value, "text-top", 8) ? 1 :
+                              vn == 3 && !strncasecmp(value, "sub", 3) ? 2 :
+                              vn == 10 && !strncasecmp(value, "text-bottom", 10) ? 2 : 0;
+            style->mask |= CSS_VERTICAL;
+            if (style->vertical) w->size_rules = true;
+        } else if (kn == 9 && !strncasecmp(key, "font-size", 9)) {
+            // 关键字只认两个最常用的档位；百分比、em、px 走同一条长度换算。
+            // Only the two common keywords are honoured; percentages, em and px share one path.
+            if (vn == 7 && !strncasecmp(value, "smaller", 7)) style->size = 67;
+            else if (vn == 6 && !strncasecmp(value, "larger", 6)) style->size = 130;
+            else style->size = css_length_percent(value, vn);
+            style->mask |= CSS_SIZE;
+            if (style->size && style->size != 100) w->size_rules = true;
         } else if (kn == 16 && !strncasecmp(key, "background-image", 16)) {
             style->background = value;
             style->background_len = vn;
@@ -397,7 +427,7 @@ static bool css_scope_match(const writer_t *w, const char *s, size_t len,
 }
 static css_style_t style_for(writer_t* w, const char* tag, const char* attrs, const char* attrs_end) {
     css_style_t out = {0};
-    unsigned priorities[6] = {0};
+    unsigned priorities[8] = {0};
     for (size_t i = 0; i < w->rule_count; ++i) {
         const css_rule_t *rule = &w->rules[i];
         bool body = rule->length == 4 && !strncasecmp(rule->selector, "body", 4);
@@ -407,7 +437,7 @@ static css_style_t style_for(writer_t* w, const char* tag, const char* attrs, co
         if (!matches) continue;
         css_style_t chosen = rule->style;
         unsigned specificity = body ? 0 : rule->specificity;
-        for (unsigned bit = 0; bit < 6; ++bit) {
+        for (unsigned bit = 0; bit < 8; ++bit) {
             if (!(chosen.mask & (1u << bit))) continue;
             if (specificity < priorities[bit]) chosen.mask &= ~(1u << bit);
             else priorities[bit] = specificity;
@@ -516,7 +546,7 @@ static esp_err_t reserve_text(writer_t* w, size_t extra) {
 // Close one span from run_start to the bytes already written. Runs are only recorded once a
 // font-family actually appeared, so books without embedded faces pay nothing.
 static esp_err_t run_open(writer_t* w) {
-    if (!w->family_rules) return ESP_OK;
+    if (!w->family_rules && !w->size_rules && !w->sup_seen) return ESP_OK;
     if (w->text.run_count == w->run_cap) {
         // 到顶就不再切段：run 表仍完整覆盖整块，只是整块用首段的字体。
         // At the cap we stop splitting: the table still covers the block, which then uses the
@@ -533,6 +563,11 @@ static esp_err_t run_open(writer_t* w) {
         .offset = w->run_start,
         .len = w->text.len - w->start - w->run_start,
         .slot = w->run_slot,
+        .size = w->run_size,
+        // 上标抬 1/3 行、下标沉 1/8 行：网页渲染器的惯例比例，按正文号计算，行高不变。
+        // Superscript rises a third of the body size and subscript sinks an eighth, the usual
+        // browser proportions. Both are relative to the body size, so the line height is untouched.
+        .rise = w->run_vertical == 1 ? 33 : w->run_vertical == 2 ? -12 : 0,
     };
     return ESP_OK;
 }
@@ -610,15 +645,19 @@ static esp_err_t emit(writer_t* w, uint32_t cp) {
         w->block_run_first = w->text.run_count;
         w->run_start = 0;
         w->run_slot = w->family;
+        w->run_size = w->size;
+        w->run_vertical = w->vertical;
     } else if (w->space) w->text.utf8[w->text.len++] = ' ';
     w->space = false;
     w->block_linked &= w->link_depth != 0;
     w->block_auxiliary |= w->auxiliary_depth != 0;
-    if (w->family != w->run_slot) {
+    if (w->family != w->run_slot || w->size != w->run_size || w->vertical != w->run_vertical) {
         esp_err_t run_err = run_open(w);
         if (run_err != ESP_OK) return run_err;
         w->run_start = w->text.len - w->start;
         w->run_slot = w->family;
+        w->run_size = w->size;
+        w->run_vertical = w->vertical;
     }
     memcpy(w->text.utf8 + w->text.len, bytes, n);
     w->text.len += n;
@@ -872,8 +911,12 @@ esp_err_t html_to_blocks_with_css_target(const char* html, size_t len,
                     }
                     if (w.depth == w.auxiliary_depth) w.auxiliary_depth = 0;
                     if (w.depth) --w.depth;
-                    if (w.family_rules && w.depth <= CSS_ANCESTOR_MAX)
+                    if ((w.family_rules || w.size_rules || w.size || w.vertical) &&
+                        w.depth <= CSS_ANCESTOR_MAX) {
                         w.family = w.depth ? w.family_at[w.depth - 1] : 0;
+                        w.size = w.depth ? w.size_at[w.depth - 1] : 0;
+                        w.vertical = w.depth ? w.vertical_at[w.depth - 1] : 0;
+                    }
                 } else if (!self_closing && !void_tag(name) &&
                            !name_equal(name, "head") && !name_equal(name, "script") && !name_equal(name, "style")) {
                     ++w.depth;
@@ -896,6 +939,35 @@ esp_err_t html_to_blocks_with_css_target(const char* html, size_t len,
                         w.family_at[w.depth - 1] =
                             (level.mask & CSS_FAMILY) ? level.family : parent;
                         w.family = w.family_at[w.depth - 1];
+                    }
+                    // <sup>/<sub> 与字号/vertical-align 声明：逐层记下，闭标签回退。
+                    // <sup>/<sub> plus size and vertical-align declarations are recorded per
+                    // depth and restored when the element closes.
+                    const bool sup_tag = name_equal(name, "sup");
+                    const bool sub_tag = name_equal(name, "sub");
+                    if (sup_tag || sub_tag) w.sup_seen = true;
+                    // 行内 style 里也可能写着字号：带 style 属性的标签都要算一次，否则
+                    // <span style="vertical-align:super"> 永远看不到。没有样式规则的正文只有
+                    // 真带 style 的标签付这份开销。
+                    // An inline style may carry the size too, so a tag with a style attribute is
+                    // always resolved; body text without such attributes pays nothing extra.
+                    bool want_size = w.size_rules || sup_tag || sub_tag;
+                    if (!want_size) {
+                        const char *probe = NULL;
+                        size_t probe_len = 0;
+                        want_size = attr_value(html + at, html + end, "style", &probe, &probe_len);
+                    }
+                    if (want_size && w.depth <= CSS_ANCESTOR_MAX) {
+                        uint8_t parent_size = w.depth >= 2 ? w.size_at[w.depth - 2] : 0;
+                        uint8_t parent_vert = w.depth >= 2 ? w.vertical_at[w.depth - 2] : 0;
+                        css_style_t level = style_for(&w, name, html + at, html + end);
+                        uint8_t size = (level.mask & CSS_SIZE) && level.size ? level.size : parent_size;
+                        if ((sup_tag || sub_tag) && !size) size = 67;
+                        w.size_at[w.depth - 1] = size;
+                        w.vertical_at[w.depth - 1] = sup_tag ? 1 : sub_tag ? 2 :
+                            ((level.mask & CSS_VERTICAL) ? level.vertical : parent_vert);
+                        w.size = size;
+                        w.vertical = w.vertical_at[w.depth - 1];
                     }
                     if (w.ancestors && w.depth <= CSS_ANCESTOR_MAX) {
                         css_node_t *node = &w.ancestors[w.depth - 1];

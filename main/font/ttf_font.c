@@ -1688,12 +1688,28 @@ static uint8_t run_slot_at(size_t offset) {
     return slot;
 }
 
+// 当前段落的字号与基线：0 号与空表都表示沿用调用方字号，行为与没有 run 表时一致。
+// Type size and baseline of the current span: zero and the empty table both mean "use the
+// caller's size", i.e. exactly the behaviour before runs existed.
+static int s_run_px, s_run_rise;
+
+static void run_style_at(size_t offset) {
+    size_t idx = 0;
+    for (size_t i = 1; i < s_draw_run_count; ++i) {
+        if (s_draw_runs[i].offset > offset) break;
+        idx = i;
+    }
+    s_run_px = s_draw_runs[idx].px;
+    s_run_rise = s_draw_runs[idx].rise;
+}
+
 // 绘制循环每个字都调用，所以只在真的换槽时才动游标。没有 run 表时什么都不做，
 // 保持单字体调用方的行为完全不变。
 // Called once per glyph, so the cursor only moves on a real change. With no run table it
 // does nothing, leaving single-face callers exactly as they were.
 static inline void run_apply(size_t offset) {
-    if (s_draw_runs == NULL) return;
+    if (s_draw_runs == NULL) { s_run_px = 0; s_run_rise = 0; return; }
+    run_style_at(offset);
     uint8_t slot = run_slot_at(offset);
     // 没装载成功的槽一律不选：否则循环会拿一张空字体去取字形。
     // Never select an unloaded slot, or the loop would look glyphs up in an empty face.
@@ -1760,12 +1776,14 @@ static void warm_text_io(int pixel_height, const char* text, const char* end) {
 
 static int measure_width(int pixel_height, const char* text) {
     int width = 0;
-    float scale = stbtt_ScaleForPixelHeight(&font_info, (float)pixel_height);
     const char* cursor = text;
     while (*cursor != '\0') {
         run_apply((size_t)(cursor - text));
+        // 逐段字号：上下标按自己的字号累加前进量，右对齐与居中才不会偏。
+        // Per-span size: superscripts add their own advance so right and centre alignment stay true.
+        const int px = s_run_px ? s_run_px : pixel_height;
         uint32_t cp = decode_utf8(&cursor);
-        const glyph_entry_t* glyph = cache_lookup(cp, pixel_height);
+        const glyph_entry_t* glyph = cache_lookup(cp, px);
         if (glyph != NULL) {
             width += glyph->advance_x;
         } else {
@@ -1773,7 +1791,7 @@ static int measure_width(int pixel_height, const char* text) {
             int advance = 0, lsb = 0;
             int gid = stbtt_FindGlyphIndex(&font_info, (int)cp);
             stbtt_GetGlyphHMetrics(&font_info, gid, &advance, &lsb);
-            width += (int)lroundf(advance * scale);
+            width += (int)lroundf(advance * stbtt_ScaleForPixelHeight(&font_info, (float)px));
         }
     }
     return width;
@@ -2337,13 +2355,18 @@ void ttf_draw_text_px(
     const char* cursor = text;
     while (*cursor != '\0') {
         run_apply((size_t)(cursor - text));
+        // 段内字号与基线：上标既小又抬，行高仍按正文号，分页不受影响。
+        // Per-span size and baseline: a superscript is both smaller and raised, while the line box
+        // keeps the body size so pagination is untouched.
+        const int px = s_run_px ? s_run_px : pixel_height;
+        const int rise = s_run_rise;
         uint32_t cp = decode_utf8(&cursor);
-        const glyph_entry_t* glyph = get_glyph(cp, pixel_height);
+        const glyph_entry_t* glyph = get_glyph(cp, px);
         if (glyph == NULL) continue;
 
         if (glyph->bitmap != NULL) {
             for (int gy = 0; gy < glyph->height; gy++) {
-                int yy = y - glyph->top + gy;
+                int yy = y - rise - glyph->top + gy;
                 for (int gx = 0; gx < glyph->width; gx++) {
                     uint8_t alpha = glyph->bitmap[gy * glyph->width + gx];
                     if (alpha == 0) continue;
@@ -2400,12 +2423,14 @@ void ttf_draw_text_px_spaced(
     const char* cursor = text;
     while (*cursor != '\0') {
         run_apply((size_t)(cursor - text));
+        const int px = s_run_px ? s_run_px : pixel_height;
+        const int rise = s_run_rise;
         uint32_t cp = decode_utf8(&cursor);
-        const glyph_entry_t* glyph = get_glyph(cp, pixel_height);
+        const glyph_entry_t* glyph = get_glyph(cp, px);
         if (glyph == NULL) continue;
         if (glyph->bitmap != NULL) {
             for (int gy = 0; gy < glyph->height; gy++) {
-                int yy = y - glyph->top + gy;
+                int yy = y - rise - glyph->top + gy;
                 for (int gx = 0; gx < glyph->width; gx++) {
                     uint8_t alpha = glyph->bitmap[gy * glyph->width + gx];
                     if (alpha == 0) continue;
@@ -2778,13 +2803,18 @@ void ttf_draw_text_px_bw(
     const char* cursor = text;
     while (*cursor != '\0') {
         run_apply((size_t)(cursor - text));
+        // 段内字号与基线：上标既小又抬，行高仍按正文号，分页不受影响。
+        // Per-span size and baseline: a superscript is both smaller and raised, while the line box
+        // keeps the body size so pagination is untouched.
+        const int px = s_run_px ? s_run_px : pixel_height;
+        const int rise = s_run_rise;
         uint32_t cp = decode_utf8(&cursor);
-        const glyph_entry_t* glyph = get_glyph(cp, pixel_height);
+        const glyph_entry_t* glyph = get_glyph(cp, px);
         if (glyph == NULL) continue;
 
         if (glyph->bitmap != NULL) {
             for (int gy = 0; gy < glyph->height; gy++) {
-                int yy = y - glyph->top + gy;
+                int yy = y - rise - glyph->top + gy;
                 for (int gx = 0; gx < glyph->width; gx++) {
                     uint8_t alpha = glyph->bitmap[gy * glyph->width + gx];
                     uint8_t ink = alpha >= 128 ? fg : bg;

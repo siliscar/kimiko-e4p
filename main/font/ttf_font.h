@@ -176,6 +176,8 @@ int ttf_text_width_px(int pixel_height, const char* text);
 typedef struct {
     uint32_t offset; ///< text 内的字节偏移，首项必须为 0 / byte offset in text, first must be 0
     uint8_t slot; ///< 对应字体槽 / matching font slot
+    uint8_t px; ///< 该段字号；0 表示沿用调用方字号 / Type size for this span; 0 keeps the caller's size
+    int8_t rise; ///< 该段基线偏移像素，正数向上 / Baseline shift in pixels, positive up
 } ttf_run_t;
 
 /// 指定下一次绘制按 run 换字体。runs 借用，须在整个绘制调用期间存活；

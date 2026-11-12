@@ -48,7 +48,7 @@ static bool s_vertical;
 static uint32_t s_generation;
 static book_layout_draw_cursor_t *s_idle_draw;
 #define LINE_RUN_MAX 64u
-typedef struct {uint32_t offset;uint8_t slot;} ttf_run_t;
+typedef struct {uint32_t offset;uint8_t slot;uint8_t px;int8_t rise;} ttf_run_t;
 static ttf_run_t s_line_runs[LINE_RUN_MAX];
 static size_t s_line_run_count;
 #define TTF_FONT_SLOT_SYSTEM 0

@@ -190,19 +190,47 @@ int book_layout_link_at(size_t page, int x, int y) {
 // 该字节属于哪个字体槽。没有 run 表就一律系统字体，排版与从前完全一致。
 // Which face owns this byte. Without a run table everything is the system face and the
 // layout behaves exactly as before.
-static uint8_t slot_at(size_t off) {
-    if (!s_book_styles || s_runs == NULL) return TTF_FONT_SLOT_SYSTEM;
+static const html_run_t* run_at(size_t off) {
+    if (!s_book_styles || s_runs == NULL) return NULL;
     const blk_t* block = block_at(off);
-    if (block == NULL || block->run_count == 0 || off < block->offset) return TTF_FONT_SLOT_SYSTEM;
+    if (block == NULL || block->run_count == 0 || off < block->offset) return NULL;
     size_t rel = off - block->offset;
     size_t last = block->run_first + block->run_count;
     if (last > s_run_count) last = s_run_count;
-    uint8_t slot = TTF_FONT_SLOT_SYSTEM;
+    const html_run_t* found = NULL;
     for (size_t i = block->run_first; i < last; ++i) {
         if (s_runs[i].offset > rel) break;
-        slot = s_runs[i].slot;
+        found = &s_runs[i];
     }
-    return slot;
+    return found;
+}
+
+static uint8_t slot_at(size_t off) {
+    const html_run_t* run = run_at(off);
+    return run ? run->slot : TTF_FONT_SLOT_SYSTEM;
+}
+
+// 该字节的字号：run 记相对正文的百分比，0 与 100 都是正文号。只缩不放——放大字会把行高
+// 撑开，分页跟着变，收益远小于风险。
+// Type size for this byte: runs hold a percentage of the body size, where 0 and 100 both mean
+// body size. Shrinking only: a larger run would raise the line box and change pagination, which
+// is far more risk than the gain is worth.
+static int px_at(size_t off, int base_px) {
+    const html_run_t* run = run_at(off);
+    if (run == NULL || run->size == 0 || run->size == 100) return base_px;
+    int px = base_px * (int)run->size / 100;
+    if (px < 8) px = 8;
+    if (px > base_px) px = base_px;
+    return px;
+}
+
+// 基线偏移：正数向上（上标），负数向下（下标），按正文号换算成像素。
+// Baseline shift in pixels: positive rises (superscript), negative sinks (subscript), scaled
+// from the body size.
+static int rise_at(size_t off, int base_px) {
+    const html_run_t* run = run_at(off);
+    if (run == NULL || run->rise == 0) return 0;
+    return (int)run->rise * base_px / 100;
 }
 
 // 装载失败或没装载的槽一律退回系统字体：拿一张空字体去量宽会得到零。
@@ -218,26 +246,28 @@ static void slot_select_for(size_t off) {
     if (slot != (uint8_t)ttf_font_selected()) ttf_font_select(slot);
 }
 
-static void line_run_push(size_t offset, uint8_t slot) {
+static void line_run_push(size_t offset, uint8_t slot, uint8_t px, int8_t rise) {
     if (offset > UINT32_MAX) return;
     if (s_line_run_count) {
         ttf_run_t* prev = &s_line_runs[s_line_run_count - 1];
-        if (prev->slot == slot) return;
+        if (prev->slot == slot && prev->px == px && prev->rise == rise) return;
         if (prev->offset == (uint32_t)offset) {
-            prev->slot = slot;
+            prev->slot = slot; prev->px = px; prev->rise = rise;
             return;
         }
     }
     if (s_line_run_count >= LINE_RUN_MAX) return;
     s_line_runs[s_line_run_count].offset = (uint32_t)offset;
     s_line_runs[s_line_run_count].slot = slot;
+    s_line_runs[s_line_run_count].px = px;
+    s_line_runs[s_line_run_count].rise = rise;
     ++s_line_run_count;
 }
 
 // 把块内 run 平移到 s_line 的坐标系：s_line 从 visible_off 起，只覆盖这一行。
 // Shift the block's runs into s_line coordinates; s_line starts at visible_off and covers
 // this line only.
-static void line_runs_build(const blk_t* block, size_t visible_off, size_t line_end) {
+static void line_runs_build(const blk_t* block, size_t visible_off, size_t line_end, int base_px) {
     s_line_run_count = 0;
     if (!s_book_styles || s_runs == NULL || block == NULL || block->run_count == 0) return;
     size_t block_end = block->offset + block->len;
@@ -249,7 +279,21 @@ static void line_runs_build(const blk_t* block, size_t visible_off, size_t line_
         size_t from = s_runs[i].offset, to = from + s_runs[i].len;
         if (to <= base) continue;
         if (from >= stop) break;
-        line_run_push(from > base ? from - base : 0, slot_ready_or_system(s_runs[i].slot));
+        uint8_t run_px = 0;
+        int8_t run_rise = 0;
+        // 竖排暂不缩放上下标：列宽只有几十像素，抬升容易压到相邻列，绘制路径也是另一套。
+        // Vertical text keeps body size for now: a column is only tens of pixels wide, a rise
+        // would crowd the next column, and its draw path is a separate implementation.
+        if (!s_vertical) {
+            int px = px_at(block->offset + (from > base ? from : base), base_px);
+            int rise = rise_at(block->offset + (from > base ? from : base), base_px);
+            if (rise > 63) rise = 63;
+            if (rise < -63) rise = -63;
+            run_px = (uint8_t)px;
+            run_rise = (int8_t)rise;
+        }
+        line_run_push(from > base ? from - base : 0, slot_ready_or_system(s_runs[i].slot),
+                      run_px, run_rise);
     }
 }
 
@@ -289,7 +333,10 @@ static int advance_between(size_t from, size_t to, int px, bool heading, bool at
         memcpy(glyph, s_text + at, n);
         glyph[n] = 0;
         slot_select_for(at);
-        width += ttf_text_width_px(px, glyph);
+        // 上下标比正文窄，链接矩形要按同一字号量，否则点击范围比字形宽。
+        // Superscripts are narrower than the body: measure the link rect at the same size, or the
+        // hit area runs wider than the ink.
+        width += ttf_text_width_px(px_at(at, px), glyph);
         if (!(first && at_line_start) && !heading) width += s_tracking_px;
         first = false;
         at += n;
@@ -737,7 +784,10 @@ static bool take_line(size_t off, int advance_limit, int hang_margin, size_t* ne
         // Every glyph is measured in its own span's face; width, tracking and alignment math
         // are untouched.
         slot_select_for(end);
-        int64_t candidate = width + ttf_text_width_px(*px, glyph) +
+        // 竖排不缩放：列内推进按正文号算，与竖排绘制保持一致。
+        // Vertical columns keep the body size so the advance matches the vertical draw path.
+        const int glyph_px = s_vertical ? *px : px_at(end, *px);
+        int64_t candidate = width + ttf_text_width_px(glyph_px, glyph) +
                             (end > visible_off && !*heading ? s_tracking_px : 0);
         if (candidate < 0) return false;
         if (candidate > available) {
@@ -796,7 +846,7 @@ static bool take_line(size_t off, int advance_limit, int hang_margin, size_t* ne
         if (!line_append(end - visible_off, glyph, n)) return false;
         end += n;
     }
-    line_runs_build(block, visible_off, end);
+    line_runs_build(block, visible_off, end, *px);
     *line_width = (int)width;
     *next = end;
     if (line_start) *line_start = visible_off;

@@ -28,6 +28,11 @@ CH1 = """<?xml version="1.0" encoding="utf-8"?>
 <p>负例二：指向不存在的锚点<sup><a href="#nope">[9]</a></sup>。预期：不弹窗。</p>
 <p>负例三：锚点落在段落中间<sup><a href="#mid">[10]</a></sup>。预期：不弹窗，否则只会显示半句话。</p>
 <p>负例三的锚点就在这段中间：前面是正文<span id="mid">这里是锚点</span>后面还是正文。</p>
+<h3>上标与下标渲染</h3>
+<p>标签上标：正文<sup>123</sup>后面继续正文，行高不应变化；再跟一句足够长的话，用来看断行有没有因为小字而错位。</p>
+<p>标签下标：H<sub>2</sub>O、x<sub>i</sub>、a<sub>1</sub>+b<sub>2</sub>，下标应当下沉而不是抬高。</p>
+<p>行内样式：<span style="vertical-align:super;font-size:70%">上标</span> 与 <span style="font-size:70%">小字</span> 混排，位置应当与标签写法一致。</p>
+<p>class 规则：<span class="sup">上标</span> 与 <span class="small">小字</span>，用来确认样式表里的声明也生效。</p>
 <h3>注释</h3>
 <p id="n1"><a href="#r1">[1]</a> 这是第一条注释。弹层会自动去掉行首的 [1] 返回标记，只显示正文。</p>
 <p id="n2"><a href="#r2">①</a> 这是第二条注释，用来验证圆圈数字角标。</p>
@@ -105,7 +110,9 @@ NCX = """<?xml version="1.0" encoding="utf-8"?>
 </ncx>
 """
 
-STYLE = """body { margin: 0; padding: 0; }
+STYLE = """.sup { vertical-align: super; font-size: 70%; }
+.small { font-size: 80%; }
+body { margin: 0; padding: 0; }
 h1 { font-size: 1.4em; }
 p { text-indent: 2em; line-height: 1.6; }
 sup { font-size: 0.7em; vertical-align: super; }

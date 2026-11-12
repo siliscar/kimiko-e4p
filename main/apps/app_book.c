@@ -3138,60 +3138,171 @@ static bool note_decode(const char *src, size_t len, char *dst, size_t cap, size
     return true;
 }
 
-static const blk_t *note_block_at(size_t off) {
-    if (!s_blocks || !s_block_count) return NULL;
-    size_t lo = 0, hi = s_block_count;
+static const blk_t *note_block_at(const blk_t *blocks, size_t count, size_t off) {
+    if (!blocks || !count) return NULL;
+    size_t lo = 0, hi = count;
     while (lo + 1 < hi) {
         size_t mid = lo + (hi - lo) / 2;
-        if (s_blocks[mid].offset <= off) lo = mid;
+        if (blocks[mid].offset <= off) lo = mid;
         else hi = mid;
     }
-    return &s_blocks[lo];
+    return &blocks[lo];
 }
 
-// 只有 "[1]" 这样的标记才当脚注：目录链接、正文超链接仍按原翻页规则处理。
-// Only markers like "[1]" count as footnotes; TOC entries and body hyperlinks keep the usual
+// 注释标记的样式很多：[1]、［1］、〔1〕、①②、上标数字、*、※、注1。判据是「短且不像词」：
+// 去掉空白后不超过 12 字节，且除了「注N」这种前缀外不含字母与汉字；正文超链接的文字是词，
+// 仍按原翻页规则处理。
+// Note markers come in many shapes: [1], ［1］, 〔1〕, ①②, a bare superscript number, * or ※.
+// The test is "short and not word-like": at most 12 bytes after trimming, with no letters or
+// ideographs apart from a 注N prefix, so body hyperlinks (whose text is words) keep the usual
 // page-turn rules.
 static bool note_is_marker(const char *text, size_t len) {
-    size_t i = 0;
-    while (i < len && (unsigned char)text[i] <= ' ') ++i;
-    if (i >= len || text[i] != '[') return false;
-    size_t digits = 0;
-    ++i;
-    while (i < len && text[i] >= '0' && text[i] <= '9' && digits < 4) { ++i; ++digits; }
-    return digits && i < len && text[i] == ']';
+    size_t i = 0, end = len;
+    while (i < end && (unsigned char)text[i] <= ' ') ++i;
+    while (end > i && (unsigned char)text[end - 1] <= ' ') --end;
+    if (i >= end || end - i > 12) return false;
+    // 「注1 / 注 12」：允许一个汉字前缀，其余必须仍是标记字符。
+    if (i + 3 <= end && (unsigned char)text[i] == 0xe6 &&
+        (unsigned char)text[i + 1] == 0xb3 && (unsigned char)text[i + 2] == 0xa8) i += 3;
+    for (; i < end;) {
+        const unsigned char c = (unsigned char)text[i];
+        if (c < 0x80) {
+            if ((c >= 'A' && c <= 'Z') || (c >= 'a' && c <= 'z')) return false;
+            ++i;
+            continue;
+        }
+        // 圆圈数字 ①..⑳ (E2 91 A0..B3)、㉑..㊿ (E3 89 A1..BF) 与 ※ (E2 80 BB) 都算标记。
+        if (c == 0xe2 && i + 2 < end &&
+            ((text[i + 1] == 0x91 && (unsigned char)text[i + 2] >= 0xa0 &&
+              (unsigned char)text[i + 2] <= 0xb3) ||
+             (text[i + 1] == 0x80 && text[i + 2] == 0xbb))) { i += 3; continue; }
+        if (c == 0xe3 && i + 2 < end && (unsigned char)text[i + 1] == 0x89 &&
+            (unsigned char)text[i + 2] >= 0xa1) { i += 3; continue; }
+        return false;
+    }
+    return true;
 }
 
-// 点中的内链若指向本章锚点，就把锚点所在段落收进弹层。跨章链接暂不处理：
-// 阅读页没有返回栈，跳过去会把当前位置弄丢。
-// A tapped link that resolves to an anchor in this chapter puts that paragraph on the sheet.
-// Cross-chapter targets are left alone: the reader has no back stack, so jumping would lose
-// the current position.
+// 把锚点所在段落收进弹层：同章与跨章共用，正文与块表由调用方给出。
+// Put the paragraph holding the anchor on the sheet; same-chapter and cross-chapter lookups
+// share it, with the text and block table supplied by the caller.
+static bool note_emit(const char *text, const blk_t *blocks, size_t block_count,
+                      size_t text_len, size_t offset) {
+    if (!text || offset >= text_len) return false;
+    // 锚点通常落在注释段落的起点；落在段尾时让给下一段。
+    // The anchor normally sits at the start of the note paragraph; at a block end, use the next one.
+    const blk_t *block = note_block_at(blocks, block_count, offset);
+    size_t start = offset, end = text_len;
+    if (block) {
+        // 段中间的锚点是脚注标记的返回点，不是注释段落；展开正文只会得到一个半段话。
+        // An anchor in the middle of a block is the note's backlink target, not a note
+        // paragraph; expanding it would show half a body paragraph.
+        for (size_t i = block->offset; i < start && i < text_len; ++i)
+            if ((unsigned char)text[i] > ' ') return false;
+        size_t block_end = block->offset + block->len;
+        if (start >= block_end && (size_t)(block - blocks) + 1 < block_count) {
+            ++block;
+            block_end = block->offset + block->len;
+        }
+        if (start < block->offset) start = block->offset;
+        end = block_end;
+    }
+    if (start >= end) return false;
+    while (start < end && ((unsigned char)text[start] <= ' ' || text[start] == '\r')) ++start;
+    // 注释段以返回标记 "[1]" 开头；弹层里不需要它。
+    // The note paragraph opens with the "[1]" backlink; the sheet does not need it.
+    if (start < end && text[start] == '[') {
+        size_t close = start + 1;
+        while (close < end && close - start <= 8 && text[close] != ']') ++close;
+        if (close < end && text[close] == ']') {
+            start = close + 1;
+            while (start < end && (unsigned char)text[start] <= ' ') ++start;
+        }
+    }
+    while (end > start && (unsigned char)text[end - 1] <= ' ') --end;
+    if (start >= end) return false;
+    size_t len = end - start, limit = READER_NOTE_BYTES - 4;
+    bool cut = len > limit;
+    if (cut) {
+        len = limit;
+        // 截断只能落在整字边界上，否则最后会多出一个半个汉字。
+        // Truncate on a codepoint boundary so the tail is not half a character.
+        while (len && ((unsigned char)text[start + len] & 0xc0) == 0x80) --len;
+    }
+    memcpy(s_note_text, text + start, len);
+    s_note_text[len] = 0;
+    if (cut) memcpy(s_note_text + len, "…", sizeof("…"));
+    ESP_LOGI(TAG, "note open len=%u", (unsigned)len);
+    s_reader_panel = READER_PANEL_NOTE;
+    invalidate_prep();
+    return true;
+}
+
+// 注释排在另一页时（不少 EPUB 把每章注释单独放一个 XHTML），临时解析那一章取段落：
+// 只读、不移动阅读位置，读完立刻释放，不在阅读页和历史里留痕。
+// When the notes live on another page (many EPUBs keep a chapter's notes in their own XHTML),
+// parse that chapter only to read the paragraph: read-only, the reading position never moves,
+// and the parsed text is freed immediately.
+static bool note_open_chapter(const char *base, const char *fragment) {
+    const size_t chapters = book_chapter_count();
+    for (size_t i = 0; i < chapters; ++i) {
+        char name[128];
+        if (book_chapter_source_name(i, name, sizeof(name)) != ESP_OK || !name[0]) continue;
+        const char *tail = strrchr(name, '/');
+        tail = tail ? tail + 1 : name;
+        if (strcmp(tail, base)) continue;
+        html_text_t text = {0};
+        bool ok = false;
+        if (book_chapter_load_blocks(i, &text) == ESP_OK) {
+            const size_t len = strlen(fragment);
+            for (size_t a = 0; a < text.anchor_count; ++a) {
+                const html_anchor_t *anchor = &text.anchors[a];
+                if (anchor->id_len == len && !memcmp(text.strings + anchor->id, fragment, len)) {
+                    ok = note_emit(text.utf8, text.blocks, text.count, text.len, anchor->offset);
+                    break;
+                }
+            }
+        }
+        html_text_free(&text);
+        return ok;
+    }
+    return false;
+}
+
+// 点中的内链若指向锚点，就把锚点所在段落收进弹层；同一章的锚点在已解析正文里直接查，
+// 指向别章（本章注释单独一页）时临时解析那一章。
+// A tapped link that resolves to an anchor puts that paragraph on the sheet: same-chapter
+// anchors are looked up in the text already parsed, and a target on another page parses that
+// chapter just for the read.
 static bool note_open_link(int link) {
     if (link < 0 || (size_t)link >= s_link_count || !s_links || !s_link_strings) return false;
     const html_link_t *entry = &s_links[link];
     if (entry->offset >= s_text_len || entry->len > s_text_len - entry->offset) return false;
     if (!note_is_marker(s_text + entry->offset, entry->len)) return false;
     const char *href = s_link_strings + entry->href;
+    ESP_LOGI(TAG, "note tap text=%.24s href=%.72s", s_text + entry->offset, href);
     const char *hash = entry->href_len ? memchr(href, '#', entry->href_len) : NULL;
     if (!hash || hash + 1 >= href + entry->href_len) return false;
-    size_t path_len = (size_t)(hash - href);
-    if (path_len) {
-        char chapter_name[128];
-        if (book_chapter_source_name(s_reader_session.position.chapter, chapter_name, sizeof(chapter_name)) != ESP_OK)
-            return false;
-        char path[160];
-        size_t path_bytes = 0;
-        if (!note_decode(href, path_len, path, sizeof(path), &path_bytes)) return false;
-        const char *base = strrchr(path, '/');
-        base = base ? base + 1 : path;
-        if (strcmp(base, chapter_name)) return false;
-    }
     char fragment[128];
     size_t fragment_len = 0;
     if (!note_decode(hash + 1, entry->href_len - (size_t)(hash + 1 - href),
                      fragment, sizeof(fragment), &fragment_len) || !fragment_len)
         return false;
+    const size_t path_len = (size_t)(hash - href);
+    if (path_len) {
+        char path[160];
+        size_t path_bytes = 0;
+        if (!note_decode(href, path_len, path, sizeof(path), &path_bytes)) return false;
+        const char *base = strrchr(path, '/');
+        base = base ? base + 1 : path;
+        char chapter_name[128];
+        if (book_chapter_source_name(s_reader_session.position.chapter, chapter_name, sizeof(chapter_name)) != ESP_OK)
+            return false;
+        if (strcmp(base, chapter_name)) {
+            ESP_LOGI(TAG, "note cross chapter=%s current=%s", base, chapter_name);
+            return note_open_chapter(base, fragment);
+        }
+    }
     size_t offset = SIZE_MAX;
     for (size_t i = 0; i < s_anchor_count; ++i) {
         const html_anchor_t *anchor = &s_anchors[i];
@@ -3201,54 +3312,11 @@ static bool note_open_link(int link) {
             break;
         }
     }
-    if (offset == SIZE_MAX || offset >= s_text_len) return false;
-    // 锚点通常落在注释段落的起点；落在段尾时让给下一段。
-    // The anchor normally sits at the start of the note paragraph; at a block end, use the next one.
-    const blk_t *block = note_block_at(offset);
-    size_t start = offset, end = s_text_len;
-    if (block) {
-        // 段中间的锚点是脚注标记的返回点，不是注释段落；展开正文只会得到一个半段话。
-        // An anchor in the middle of a block is the note's backlink target, not a note
-        // paragraph; expanding it would show half a body paragraph.
-        for (size_t i = block->offset; i < start && i < s_text_len; ++i)
-            if ((unsigned char)s_text[i] > ' ') return false;
-        size_t block_end = block->offset + block->len;
-        if (start >= block_end && (size_t)(block - s_blocks) + 1 < s_block_count) {
-            ++block;
-            block_end = block->offset + block->len;
-        }
-        if (start < block->offset) start = block->offset;
-        end = block_end;
+    if (offset == SIZE_MAX || offset >= s_text_len) {
+        ESP_LOGI(TAG, "note skip anchor=%s found=%d", fragment, offset != SIZE_MAX);
+        return false;
     }
-    if (start >= end) return false;
-    while (start < end && ((unsigned char)s_text[start] <= ' ' || s_text[start] == '\r'))
-        ++start;
-    // 注释段以返回标记 "[1]" 开头；弹层里不需要它。
-    // The note paragraph opens with the "[1]" backlink; the sheet does not need it.
-    if (start < end && s_text[start] == '[') {
-        size_t close = start + 1;
-        while (close < end && close - start <= 8 && s_text[close] != ']') ++close;
-        if (close < end && s_text[close] == ']') {
-            start = close + 1;
-            while (start < end && (unsigned char)s_text[start] <= ' ') ++start;
-        }
-    }
-    while (end > start && (unsigned char)s_text[end - 1] <= ' ') --end;
-    if (start >= end) return false;
-    size_t len = end - start, limit = READER_NOTE_BYTES - 4;
-    bool cut = len > limit;
-    if (cut) {
-        len = limit;
-        // 截断只能落在整字边界上，否则最后会多出一个半个汉字。
-        // Truncate on a codepoint boundary so the tail is not half a character.
-        while (len && ((unsigned char)s_text[start + len] & 0xc0) == 0x80) --len;
-    }
-    memcpy(s_note_text, s_text + start, len);
-    s_note_text[len] = 0;
-    if (cut) memcpy(s_note_text + len, "…", sizeof("…"));
-    s_reader_panel = READER_PANEL_NOTE;
-    invalidate_prep();
-    return true;
+    return note_emit(s_text, s_blocks, s_block_count, s_text_len, offset);
 }
 
 // 按 UI 字号折行；返回行数，truncated 表示还有内容没放下。

@@ -37,6 +37,11 @@ static int s_first_line_indent_adjust_px;
 static unsigned s_reading_line;
 static int s_reading_line_offset;
 static bool s_images_visible = true;
+// 角标热区向四周放宽的像素：横向半个字、纵向约四分之一行，点空才落到翻页。
+// Extra hit slop around a marker: half a character across and about a quarter line down, so a
+// near miss stays a tap instead of a page turn.
+#define LINK_HIT_PAD_X 20
+#define LINK_HIT_PAD_Y 14
 static bool s_book_styles = true;
 // 竖排：同一套折行与禁则逻辑，只是推进方向朝下、堆叠方向朝左。
 // Vertical setting: the same wrapping and kinsoku logic, with the advance running down and the
@@ -167,6 +172,13 @@ void book_layout_adopt_page(size_t page) {
 }
 
 int book_layout_link_at(size_t page, int x, int y) {
+    // 角标只有一两个字宽，按字形矩形判定几乎点不中，点空又会翻页。先按原矩形精确命中，
+    // 没命中再向四周放宽，多个候选时取中心最近的那个：既扩大热区，也不会误抢同一行的另一个链接。
+    // Marker glyphs are one or two characters wide, so an ink-tight rect is nearly untappable and
+    // a miss turns the page. Try the exact rect first, then the same rect widened, picking the
+    // nearest centre when several qualify so neighbouring links never steal each other's taps.
+    int best = -1;
+    int64_t best_distance = INT64_MAX;
     // 两张表都可能属于这一页（预绘续画后屏幕页没有同步重绘），先查屏上那张再查预绘那张。
     // Both tables can belong to this page after a prefetch resume, so try the screen table and
     // then the prefetch table.
@@ -178,13 +190,22 @@ int book_layout_link_at(size_t page, int x, int y) {
         if (page != hit_page || generation != s_generation) continue;
         for (size_t i = 0; i < count; ++i) {
             const link_hit_t* hit = &table[i];
-            if (x < hit->x || x >= hit->x + hit->width ||
-                y < hit->y || y >= hit->y + hit->height)
+            if (x >= hit->x && x < hit->x + hit->width &&
+                y >= hit->y && y < hit->y + hit->height)
+                return hit->link;
+            if (x < hit->x - LINK_HIT_PAD_X || x >= hit->x + hit->width + LINK_HIT_PAD_X ||
+                y < hit->y - LINK_HIT_PAD_Y || y >= hit->y + hit->height + LINK_HIT_PAD_Y)
                 continue;
-            return hit->link;
+            const int64_t dx = x - (hit->x + hit->width / 2);
+            const int64_t dy = y - (hit->y + hit->height / 2);
+            const int64_t distance = dx * dx + dy * dy;
+            if (distance < best_distance) {
+                best_distance = distance;
+                best = hit->link;
+            }
         }
     }
-    return -1;
+    return best;
 }
 
 // 该字节属于哪个字体槽。没有 run 表就一律系统字体，排版与从前完全一致。

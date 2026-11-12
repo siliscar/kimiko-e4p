@@ -1173,7 +1173,11 @@ int main(void) {
     // 首行缩进 2 字 = 20px，链接从第 3 个字起：x = 20 + 2*10 = 40，宽 3*10 = 30。
     // Two-em indent = 20 px and the link starts at the third glyph: x = 40, width = 30.
     assert(book_layout_link_at(0, 45, 5) == 0);
-    assert(book_layout_link_at(0, 5, 5) == -1);
+    // 热区向四周放宽 16×12：紧贴标记的空白也算命中，远处与别的页仍然不算。
+    // The hit rect is widened by 16×12: a tap just beside the marker counts, a far one or one
+    // on another page does not.
+    assert(book_layout_link_at(0, 5, 5) == 0);
+    assert(book_layout_link_at(0, 200, 100) == -1);
     assert(book_layout_link_at(1, 45, 5) == -1);
     // 预绘路径：分片绘制后命中表同样可用（翻页常常直接用预绘缓冲）。
     // Prefetch path: the hit table works after slice drawing too, since turns often present

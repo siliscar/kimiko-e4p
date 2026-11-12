@@ -123,7 +123,12 @@ int main(void){
     assert(book_toc_jump_hit(342,640)==BOOK_TOC_JUMP_TRACK);
     assert(book_toc_jump_percent(92)==0 && book_toc_jump_percent(592)==100);
     assert(book_toc_page_from_percent(0,24)==0);
-    assert(book_toc_page_from_percent(4,24)==0);
+    assert(book_toc_page_from_percent(4,24)==1);  // 23 页间距的 4% 落在 0.92 页，四舍五入到第 2 页
+    for(int pct=0;pct<=100;++pct){
+        int page=book_toc_page_from_percent(pct,24);
+        assert(page>=0&&page<24);
+        assert(book_toc_percent_from_page(page,24)>=pct-3&&book_toc_percent_from_page(page,24)<=pct+3);
+    }
     assert(book_toc_page_from_percent(60,24)==14);
     assert(book_toc_page_from_percent(100,24)==23);
     char title[160]; one_line(title,sizeof(title),"  第一章\n 重叠\t标题  ");
@@ -131,13 +136,13 @@ int main(void){
     char long_title[160]; memset(long_title,'A',sizeof(long_title)-1);long_title[159]=0;
     fit_line(long_title,30,100);assert(strstr(long_title,"…")!=NULL);
     uint8_t fb=0;
-    book_toc_render(&fb,"书名\n下一行",8,1,0,"");
+    book_toc_render(&fb,"书名\n下一行",8,1,0,"",0);
     assert(cards==13 && labels>=17 && large_titles==7 && skip_labels==2);
     assert(borders==26 && pager_labels==2 && jump_labels==1);
     assert(title_draws==8&&selected_titles==1&&white_titles==6);
-    book_toc_render_jump(&fb,168,60);
+    book_toc_render_jump(&fb,168,"第 99～105 节");
     assert(jump_summary==1);
-    nav_shift=1;seen_count=0;book_toc_render(&fb,"目录",4,1,0,"");
+    nav_shift=1;seen_count=0;book_toc_render(&fb,"目录",4,1,0,"",0);
     assert(seen_count==4&&seen_sources[0]==1&&seen_sources[3]==4);
     puts("book_toc: pages, taps, overflow, single-line titles, stable title font path and selected-row backgrounds passed");
     return 0;

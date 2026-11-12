@@ -3723,17 +3723,53 @@ static void reader_prefetch_idle(app_ctx_t *ctx) {
     reader_prefetch_work_idle(s_reader_session.position.page + 1);
 }
 static size_t current_toc_position(void) {
-    size_t count = book_navigation_count();
-    if (s_selected_toc < count && book_navigation_chapter(s_selected_toc) == s_reader_session.position.chapter)
+    const size_t count = book_navigation_count();
+    const size_t chapter_now = s_reader_session.position.chapter;
+    if (!count) return SIZE_MAX;
+    if (s_selected_toc < count && book_navigation_chapter(s_selected_toc) == chapter_now)
         return s_selected_toc;
-    size_t selected = SIZE_MAX;
-    size_t best_chapter = 0;
+    // 目录项与章节是「一对多」：分节型目录里同一章会占多条。旧实现固定取该章第一条，
+    // 读到章末时目录仍停在章首；这里按「本章已读页数」在其中插值定位。
+    // 章节号也不保证单调（EPUB 多层目录会回退），所以遇到更大的章号只跳过，不提前结束。
+    // Entries map many-to-one onto chapters: a sectioned TOC gives one chapter several
+    // entries. The old code always took the chapter's first entry, so the TOC stayed at the
+    // chapter head however far the reader went; interpolate by pages read inside the chapter.
+    // Chapters are not guaranteed monotonic (nested EPUB TOCs go back), so a larger chapter is
+    // skipped instead of ending the scan.
+    size_t first = SIZE_MAX, last = SIZE_MAX, before = SIZE_MAX, before_chapter = 0;
     for (size_t i = 0; i < count; ++i) {
-        size_t chapter = book_navigation_chapter(i);
-        if (chapter > s_reader_session.position.chapter) break;
-        if (selected == SIZE_MAX || chapter > best_chapter) { selected = i; best_chapter = chapter; }
+        const size_t chapter = book_navigation_chapter(i);
+        if (chapter == SIZE_MAX) continue;
+        if (chapter == chapter_now) {
+            if (first == SIZE_MAX) first = i;
+            last = i;
+        } else if (chapter < chapter_now && (before == SIZE_MAX || chapter >= before_chapter)) {
+            before = i; before_chapter = chapter;
+        }
     }
-    return selected;
+    if (first == SIZE_MAX) return before == SIZE_MAX ? 0 : before;
+    if (last == first) return first;
+    unsigned pages = (unsigned)book_layout_page_count();
+    if (pages < 2) return first;
+    unsigned page = (unsigned)s_reader_session.position.page;
+    if (page >= pages) page = pages - 1;
+    return first + (size_t)((uint64_t)page * (last - first) / (pages - 1));
+}
+// 打开目录并把页码落到「当前页所在条目」；工具层与正文点按两条入口共用同一套定位。
+// Open the TOC on the page holding the entry that owns the current page; the tools layer and
+// the body tap share this one placement path.
+static void open_toc(app_ctx_t *ctx) {
+    save_progress();
+    set_reader_view(TOC);
+    s_message[0] = 0;
+    s_toc_jump_open = s_toc_jump_drag = false;
+    s_reader_panel = READER_PANEL_NONE;
+    const size_t entry = current_toc_position();
+    ctx->leaf = entry == SIZE_MAX ? 0 : (int)(entry / BOOK_TOC_ROWS);
+    ESP_LOGI(TAG, "toc open entries=%u chapter=%u page=%u/%u entry=%d leaf=%d",
+             (unsigned)book_navigation_count(), (unsigned)s_reader_session.position.chapter,
+             (unsigned)s_reader_session.position.page + 1, (unsigned)book_layout_page_count(),
+             entry == SIZE_MAX ? -1 : (int)entry, ctx->leaf);
 }
 static void render(app_ctx_t* ctx, uint8_t* fb) {
 #if CONFIG_READER_PERF
@@ -5867,13 +5903,7 @@ static app_redraw_t reader_panel_action(app_ctx_t* ctx, uint16_t x, uint16_t y) 
         for (int i = 0; i < BOOK_TOOL_COUNT; ++i) if (ui_rect_hit(tool_rect(i), x, y)) {
             invalidate_prep();
             if (i == 0) {
-                save_progress();
-                set_reader_view(TOC);
-                s_message[0] = 0;
-                s_toc_jump_open = s_toc_jump_drag = false;
-                s_reader_panel = READER_PANEL_NONE;
-                size_t toc = current_toc_position();
-                ctx->leaf = toc == SIZE_MAX ? 0 : (int)(toc / BOOK_TOC_ROWS);
+                open_toc(ctx);
             } else if (i == 1) {
                 (void)bookmark_toggle();
             } else if (i == 2) {
@@ -7354,11 +7384,7 @@ static app_redraw_t gesture_event(app_ctx_t* ctx, const ui_gesture_event_t* ev) 
             return APP_REDRAW_PAGE;
         }
         if (s_view == READING && !s_toolbar && !s_clear_confirm && ui_rect_hit(body_rect(), ev->x0, ev->y0)) {
-            save_progress();
-            set_reader_view(TOC);
-            s_message[0] = 0;
-            size_t toc = current_toc_position();
-            ctx->leaf = toc == SIZE_MAX ? 0 : (int)(toc / BOOK_TOC_ROWS);
+            open_toc(ctx);
             return APP_REDRAW_PAGE;
         }
     }
